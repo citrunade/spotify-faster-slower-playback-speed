@@ -89,6 +89,27 @@ power.addEventListener('click', async () => {
   }
 });
 
+// ---- Recently played -----------------------------------------------------------
+async function renderHistory() {
+  const { history = [] } = await chrome.storage.local.get('history');
+  $('historyList').replaceChildren(ssBuildHistoryList(history, pickHistory, null));
+}
+function pickHistory(entry) {
+  if (embeddedTab) parent.postMessage({ spotifyStretchPlay: entry }, '*');
+  else if (isSpotify(tab)) { chrome.tabs.sendMessage(tab.id, { cmd: 'playHistory', entry }).catch(() => {}); window.close(); }
+}
+function showView(history) {
+  $('viewHistory').hidden = !history;
+  $('viewSettings').hidden = history;
+  $('tabHistory').classList.toggle('active', history);
+  $('tabSettings').classList.toggle('active', !history);
+  if (history) renderHistory();
+}
+$('tabSettings').addEventListener('click', () => showView(false));
+$('tabHistory').addEventListener('click', () => showView(true));
+$('historyClear').addEventListener('click', async () => { await chrome.storage.local.set({ history: [] }); renderHistory(); });
+chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.history && !$('viewHistory').hidden) renderHistory(); });
+
 const isSpotify = (t) => !!t?.url && t.url.startsWith('https://open.spotify.com/');
 
 (async () => {

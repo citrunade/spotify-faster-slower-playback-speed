@@ -10,6 +10,17 @@
     <button id="power" class="power" aria-pressed="false">Off</button>
   </header>
   <p id="status" class="status"></p>
+  <nav class="tabs">
+    <button id="tabSettings" class="active">Settings</button>
+    <button id="tabHistory">Recently played</button>
+  </nav>
+
+  <div id="viewHistory" hidden>
+    <div id="historyList" class="history"></div>
+    <button id="historyClear" class="small">Clear history</button>
+  </div>
+
+  <div id="viewSettings">
 
   <section>
     <label for="speed">Speed <output id="speedOut"></output></label>
@@ -50,6 +61,9 @@
     <input id="reverb" type="range" min="0" max="1" step="0.01">
   </section>
 
+  </div>
+
+  <script src="history-render.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

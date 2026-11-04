@@ -19,6 +19,10 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 4. **Pitch**: shift up or down by up to 12 semitones (pitch stays original otherwise). **Tape mode** lets the pitch follow the speed instead: slowed sounds deeper, sped up sounds higher (classic "slowed + reverb" / nightcore). The pitch knob adds on top.
 5. Press **On** again to go back to normal Spotify.
 
+### Recently played
+
+The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel, or from the extension panel. Clicking a song opens its album and starts it. Only songs played in the web player after installing are recorded.
+
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 
 ## App window (starts by itself)
@@ -41,7 +45,8 @@ The extension ID is tied to the folder path: if you move the folder, re-run the 
 | File | Role |
 |---|---|
 | `page-rate.js` | Runs inside Spotify; forces the speed with pitch keeping off |
-| `content.js` | Passes the speed from the extension to the page |
+| `content.js` | Passes the speed from the extension to the page; speed button in the player bar |
+| `history.js`, `history-render.js` | Recently played: records songs, queue-panel tab, play from history |
 | `background.js` | Starts/stops capture, keeps speed and pitch shift in step |
 | `offscreen.*`, `audio-chain.js` | Captured audio → pitch shift → bass → reverb → speakers |
 | `popup.*` | Controls (toolbar popup, or panel inside the app window) |

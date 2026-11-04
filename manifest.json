@@ -17,13 +17,13 @@
     },
     {
       "matches": ["https://open.spotify.com/*"],
-      "js": ["content.js"],
+      "js": ["content.js", "history-render.js", "history.js"],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["popup.html", "popup.js", "popup.css"], "matches": ["https://open.spotify.com/*"] }
+    { "resources": ["popup.html", "popup.js", "popup.css", "history-render.js"], "matches": ["https://open.spotify.com/*"] }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
