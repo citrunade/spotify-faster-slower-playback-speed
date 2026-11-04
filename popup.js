@@ -105,9 +105,9 @@ async function renderHistory() {
   const { history = [] } = await chrome.storage.local.get('history');
   $('historyList').replaceChildren(ssBuildHistoryList(history, pickHistory, null));
 }
-function pickHistory(entry) {
-  if (embeddedTab) parent.postMessage({ spotifyStretchPlay: entry }, '*');
-  else if (isSpotify(tab)) { chrome.tabs.sendMessage(tab.id, { cmd: 'playHistory', entry }).catch(() => {}); window.close(); }
+function pickHistory(action, entry) {
+  if (embeddedTab) parent.postMessage({ spotifyStretchAction: { action, entry } }, '*');
+  else if (isSpotify(tab)) { chrome.tabs.sendMessage(tab.id, { cmd: 'historyAction', action, entry }).catch(() => {}); window.close(); }
 }
 function showView(history) {
   $('viewHistory').hidden = !history;

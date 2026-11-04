@@ -42,16 +42,18 @@
     await chrome.storage.local.set({ history: history.slice(0, MAX) });
   }, 2000);
 
-  // ---- Playing a song from the history ---------------------------------------------
+  // ---- Acting on a song from the history -------------------------------------------
+  // The web player only offers song actions on a song's row, so we open the song's album
+  // behind a frozen copy of the current view, use the row (play button or Spotify's own
+  // "More options" menu), then go back. Menu items are matched by their English text.
   const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function navigate(path) {
     if (location.pathname === path) return;
-    history.pushState({}, '', path);
-    dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+    history.pushState({ key: Math.random().toString(36).slice(2, 8), state: {} }, '', path);
+    dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // Path of child indexes from root to el, to find "the same" element in a copy or re-render.
   const pathOf = (root, el) => {
@@ -61,8 +63,7 @@
   };
   const byPath = (root, p) => p.reduce((n, i) => n?.children[i], root);
 
-  // Lays a frozen copy of the main view over it, so the page switching underneath
-  // (album → play → back) isn't seen. Returns the scroll positions to restore later.
+  // Lays a frozen copy of the main view over it, so the page switching underneath isn't seen.
   function freezeMain() {
     const main = document.querySelector('main');
     if (!main) return null;
@@ -82,10 +83,9 @@
     return { cover, scrolled };
   }
 
-  async function unfreezeMain(frozen) {
+  async function unfreezeMain(frozen, restoreScroll) {
     if (!frozen) return;
-    // Give Spotify a moment to re-render the previous page, then put its scroll back.
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 10 && restoreScroll; i++) { // let Spotify re-render, then put scroll back
       await sleep(100);
       const main = document.querySelector('main');
       if (!main) continue;
@@ -96,64 +96,139 @@
 
   // Looser comparison: letters and digits only ("Song (feat. X) - Lofi" ≈ "Song - Lofi").
   const loose = (s) => norm(s).replace(/\((feat|with)[^)]*\)/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+  const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
 
+  // Only the main view: the queue panel has rows of the same kind.
   function findRow(want) {
-    const rows = [...document.querySelectorAll('[data-testid="tracklist-row"]')];
-    const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
+    const main = document.querySelector('main');
+    const rows = main ? [...main.querySelectorAll('[data-testid="tracklist-row"]')] : [];
     const lw = loose(want);
     return {
-      titles: rows.map(titleOf).slice(0, 30),
-      row: rows.find((r) => titleOf(r) === want)
-        || rows.find((r) => { const t = loose(titleOf(r)); return t && lw && (t === lw || lw.startsWith(t) || t.startsWith(lw)); }),
+      rows,
+      row: want ? (rows.find((r) => titleOf(r) === want)
+        || rows.find((r) => { const t = loose(titleOf(r)); return t && lw && (t === lw || lw.startsWith(t) || t.startsWith(lw)); })) : null,
     };
+  }
+
+  // Long albums only draw the rows on screen: scroll the view down until the song shows up.
+  async function scrollToFind(want) {
+    let { rows, row } = findRow(want);
+    let sc = rows[0];
+    while (sc && !(sc.scrollHeight > sc.clientHeight + 10 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    for (let i = 0; !row && sc && i < 25; i++) {
+      const before = sc.scrollTop;
+      sc.scrollTop += sc.clientHeight * 0.7;
+      await sleep(200);
+      ({ row } = findRow(want));
+      if (sc.scrollTop === before) break; // reached the bottom
+    }
+    return row;
+  }
+
+  // Waits for the album page (title matches, rows drawn), then finds the song's row.
+  async function openAlbumRow(entry) {
+    const want = norm(entry.title);
+    for (let i = 0; i < 60; i++) { // up to ~12 s
+      await sleep(200);
+      if (location.pathname !== entry.albumUrl) continue;
+      const { rows, row } = findRow(want);
+      if (row) return row;
+      const pageTitle = document.querySelector('main [data-testid="entityTitle"]')?.textContent;
+      const albumShown = pageTitle ? loose(pageTitle) === loose(entry.album) : i > 20;
+      if (rows.length && albumShown) return scrollToFind(want);
+    }
+    return null;
+  }
+
+  const rowButton = (row, re) => [...row.querySelectorAll('button')].find((b) => re.test(b.getAttribute('aria-label') || ''));
+
+  async function menuItem(row, re) {
+    const more = row.querySelector('[data-testid="more-button"]') || rowButton(row, /^More options/);
+    if (!more) return 'no-menu';
+    more.click();
+    for (let i = 0; i < 15; i++) {
+      await sleep(100);
+      const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')];
+      if (!items.length) continue;
+      const item = items.find((m) => re.test(m.textContent.trim()));
+      if (item) { item.click(); return 'ok'; }
+      more.click(); // close the menu again
+      return 'no-item';
+    }
+    return 'no-menu';
+  }
+
+  // What each action does once the song's row is found. Returns a short result string.
+  const ACTIONS = {
+    play: async (row) => {
+      const btn = rowButton(row, /^Play /);
+      if (btn) btn.click();
+      else row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
+      return 'ok';
+    },
+    queue: (row) => menuItem(row, /^Add to queue$/i),
+    like: async (row) => {
+      if (rowButton(row, /^Remove from (your )?Liked Songs/i)) return 'already';
+      return menuItem(row, /^(Add|Save) to (your )?Liked Songs$/i);
+    },
+    radio: (row) => menuItem(row, /^Go to song radio$/i),
+  };
+  const STAYS = { radio: true }; // these leave the user on the new page
+  const DONE = { queue: 'Added to queue', like: 'Added to Liked Songs' };
+
+  function toast(text) {
+    const t = document.createElement('div');
+    t.textContent = text;
+    t.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483647;'
+      + 'background:#fff;color:#000;padding:8px 16px;border-radius:6px;font:600 14px system-ui,sans-serif;'
+      + 'box-shadow:0 4px 16px rgba(0,0,0,.5);pointer-events:none;';
+    document.documentElement.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
   }
 
   // Last attempt's details, kept so a failure can be diagnosed.
   const note = (d) => chrome.storage.local.set({ lastPlayAttempt: { at: Date.now(), ...d } }).catch(() => {});
 
-  const pressPlay = (row) =>
-    [...row.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''))?.click();
-
-  async function play(entry) {
-    if (!entry.albumUrl) {
-      navigate(`/search/${encodeURIComponent(`${entry.title} ${entry.artist}`)}`);
-      return;
-    }
-    const want = norm(entry.title);
-    const onAlbum = location.pathname === entry.albumUrl;
-    // Already on that album: just press play, nothing to hide.
-    if (onAlbum) { const { row } = findRow(want); if (row) { pressPlay(row); return; } }
-
+  let busy = false;
+  async function act(action, entry) {
+    if (action === 'album') { if (entry.albumUrl) navigate(entry.albumUrl); return; }
+    if (action === 'artist') { if (entry.artistUrl) navigate(entry.artistUrl); return; }
+    if (!ACTIONS[action]) return;
+    if (!entry.albumUrl) { navigate(`/search/${encodeURIComponent(`${entry.title} ${entry.artist}`)}`); return; }
+    if (busy) return;
+    busy = true;
     const from = location.pathname;
+    const onAlbum = from === entry.albumUrl;
     const frozen = onAlbum ? null : freezeMain();
-    navigate(entry.albumUrl);
-    // Wait up to ~10 s for the album's track list. Rows of the previous page can still be on
-    // screen while the album loads, so keep looking the whole time instead of giving up early.
-    let played = false, found = null, titles = [], hasButton = false;
-    for (let i = 0; i < 50 && !played; i++) {
-      await sleep(200);
-      ({ row: found, titles } = findRow(want));
-      if (!found) continue;
-      const btn = [...found.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''));
-      hasButton = !!btn;
-      if (btn) { btn.click(); played = true; }
-      else if (i > 10) { // no play button found: double-clicking a row also plays it in Spotify
-        found.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
-        played = true;
-      }
+    let result = 'not-found';
+    try {
+      navigate(entry.albumUrl);
+      const want = norm(entry.title);
+      const row = onAlbum ? (findRow(want).row || await scrollToFind(want)) : await openAlbumRow(entry);
+      if (row) result = await ACTIONS[action](row);
+    } catch (e) { result = `error: ${e.message}`; }
+    note({ action, want: entry.title, from, album: entry.albumUrl, result, titles: findRow('').rows.map(titleOf).slice(0, 30) });
+    if (STAYS[action] && result === 'ok') { await sleep(400); frozen?.cover.remove(); busy = false; return; }
+    if (result === 'not-found') {
+      frozen?.cover.remove(); // leave them on the album so they can pick the song themselves
+      toast('Couldn’t find that song on its album');
+    } else {
+      if (!onAlbum) history.back();
+      await unfreezeMain(frozen, !onAlbum);
+      if (result === 'ok' && DONE[action]) toast(DONE[action]);
+      else if (result === 'already') toast('Already in Liked Songs');
+      else if (result !== 'ok') toast('That didn’t work, try again');
     }
-    note({ want: entry.title, from, album: entry.albumUrl, found: !!found, hasButton, played, titles });
-    // Played: go back to where the user was. Not found: stay on the album so they can pick it.
-    if (played && !onAlbum) history.back();
-    await unfreezeMain(frozen);
+    busy = false;
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.cmd === 'playHistory' && msg.entry) play(msg.entry);
+    if (msg?.cmd === 'historyAction' && msg.entry) act(msg.action, msg.entry);
   });
   const extOrigin = new URL(chrome.runtime.getURL('')).origin;
   window.addEventListener('message', (e) => {
-    if (e.origin === extOrigin && e.data?.spotifyStretchPlay) play(e.data.spotifyStretchPlay);
+    const d = e.data?.spotifyStretchAction;
+    if (e.origin === extOrigin && d?.entry) act(d.action, d.entry);
   });
 
   // ---- "Recently played" tab in the queue panel -------------------------------------
@@ -203,7 +278,7 @@
       if (!showingRecent) return;
       const { history = [] } = await chrome.storage.local.get('history');
       const cur = nowPlaying();
-      panel.replaceChildren(ssBuildHistoryList(history, play, cur && ssHistoryKey(cur)));
+      panel.replaceChildren(ssBuildHistoryList(history, act, cur && ssHistoryKey(cur)));
     };
     tab.addEventListener('click', () => setView(true));
     queueTitle.addEventListener('click', () => { if (showingRecent) setView(false); });
