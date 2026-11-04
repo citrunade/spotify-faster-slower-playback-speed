@@ -96,18 +96,28 @@
 
   // Looser comparison: letters and digits only ("Song (feat. X) - Lofi" ≈ "Song - Lofi").
   const loose = (s) => norm(s).replace(/\((feat|with)[^)]*\)/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
-  const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
+  // A row's song title: the title link if present, else the play button's label
+  // ("Play <title> by <artists>"), else the row's text.
+  const playLabel = (r) => [...r.querySelectorAll('button')]
+    .map((b) => b.getAttribute('aria-label') || '').find((l) => /^Play /.test(l)) || '';
+  const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent
+    || playLabel(r).replace(/^Play /, '') || r.innerText.replace(/^\s*\d+\s*/, ''));
+
+  function rowMatches(r, want, lw) {
+    const t = titleOf(r);
+    if (t === want) return true;
+    const lt = loose(t);
+    // Title from a "Play X by Y" label or row text has extra words after the title.
+    return !!(lt && lw && (lt === lw || lt.startsWith(lw) || (lt.length >= 4 && lw.startsWith(lt))));
+  }
 
   // Only the main view: the queue panel has rows of the same kind.
   function findRow(want) {
     const main = document.querySelector('main');
     const rows = main ? [...main.querySelectorAll('[data-testid="tracklist-row"]')] : [];
     const lw = loose(want);
-    return {
-      rows,
-      row: want ? (rows.find((r) => titleOf(r) === want)
-        || rows.find((r) => { const t = loose(titleOf(r)); return t && lw && (t === lw || lw.startsWith(t) || t.startsWith(lw)); })) : null,
-    };
+    const exact = want ? rows.find((r) => titleOf(r) === want) : null;
+    return { rows, row: want ? (exact || rows.find((r) => rowMatches(r, want, lw)) || null) : null };
   }
 
   // Long albums only draw the rows on screen: scroll the view down until the song shows up.
@@ -135,6 +145,7 @@
       if (row) return row;
       const pageTitle = document.querySelector('main [data-testid="entityTitle"]')?.textContent;
       const albumShown = pageTitle ? loose(pageTitle) === loose(entry.album) : i > 20;
+      if (rows.length === 1 && pageTitle && albumShown) return rows[0]; // single: its only song
       if (rows.length && albumShown) return scrollToFind(want);
     }
     return null;
@@ -161,7 +172,7 @@
   // What each action does once the song's row is found. Returns a short result string.
   const ACTIONS = {
     play: async (row) => {
-      const btn = rowButton(row, /^Play /);
+      const btn = rowButton(row, /^Playb/);
       if (btn) btn.click();
       else row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
       return 'ok';

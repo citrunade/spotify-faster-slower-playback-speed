@@ -13,6 +13,7 @@ async function start(streamId, settings) {
   await ctx.resume();
   const src = ctx.createMediaStreamSource(stream);
   chain = await buildChain(ctx, src, settings);
+  globalThis.__spotifyStretchChain = chain; // for diagnostics from DevTools
   stream.getAudioTracks().forEach((t) => {
     t.onended = () => chrome.runtime.sendMessage({ cmd: 'ended' }).catch(() => {});
   });
