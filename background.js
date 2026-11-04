@@ -78,9 +78,10 @@ async function hello(sender) {
   let appWindow = false;
   try { appWindow = (await chrome.windows.get(tab.windowId)).type !== 'normal'; } catch {}
   const settings = await getSettings();
-  let { tabId } = await getState();
+  const { tabId } = await getState();
   if (tabId == null && settings.enabled && sender.frameId === 0) {
-    try { await start(tab.id); tabId = tab.id; } catch { /* normal Chrome: needs the icon click */ }
+    // Don't make the page wait: start() sends the speed to the tab once audio is running.
+    start(tab.id).catch(() => { /* normal Chrome: needs the icon click */ });
   }
   return { rate: tabId === tab.id ? settings.speed : 1, tabId: tab.id, appWindow };
 }
