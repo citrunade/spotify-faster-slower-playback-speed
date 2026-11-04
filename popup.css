@@ -28,3 +28,4 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 2px;
   background: transparent; color: var(--text); cursor: pointer; font-size: 12px;
 }
 .presets button.active { border-color: var(--accent); color: var(--accent); }
+body.embedded { width: auto; }

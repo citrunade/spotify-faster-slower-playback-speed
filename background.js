@@ -1,7 +1,7 @@
 // Service worker: owns the capture state and keeps the page speed and the
 // offscreen pitch correction in step.
 
-const DEFAULTS = { speed: 1.25, bass: 4, reverb: 0 };
+const DEFAULTS = { speed: 1.25, bass: 4, reverb: 0, enabled: true };
 
 const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
 const getState = async () => chrome.storage.session.get({ tabId: null, latency: null });
@@ -35,9 +35,12 @@ async function stop() {
   }
 }
 
+// streamId comes from the popup (user click). Without one we ask ourselves, which only
+// works when Chrome was launched with --allowlisted-extension-id (the app window shortcut).
 async function start(tabId, streamId) {
   const state = await getState();
   if (state.tabId != null) await stop();
+  if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   await ensureOffscreen();
   const settings = await getSettings();
   const res = await chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'start', streamId, settings });
@@ -57,11 +60,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'start': return start(msg.tabId, msg.streamId);
       case 'stop': await stop(); return { ok: true };
       case 'status': return getState();
-      case 'getRate': {
-        const { tabId } = await getState();
-        if (sender.tab && sender.tab.id === tabId) return { rate: (await getSettings()).speed };
-        return { rate: 1 };
-      }
+      case 'hello': return hello(sender);
       case 'ended': await stop(); return { ok: true };
     }
   })().then(
@@ -71,8 +70,23 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true;
 });
 
+// A Spotify page (re)loaded: tell it its speed, auto-start if allowed, and say whether
+// it sits in an app window (no toolbar icon), where it should show its own settings button.
+async function hello(sender) {
+  const tab = sender.tab;
+  if (!tab) return { rate: 1 };
+  let appWindow = false;
+  try { appWindow = (await chrome.windows.get(tab.windowId)).type !== 'normal'; } catch {}
+  const settings = await getSettings();
+  let { tabId } = await getState();
+  if (tabId == null && settings.enabled && sender.frameId === 0) {
+    try { await start(tab.id); tabId = tab.id; } catch { /* normal Chrome: needs the icon click */ }
+  }
+  return { rate: tabId === tab.id ? settings.speed : 1, tabId: tab.id, appWindow };
+}
+
 chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== 'local') return;
+  if (area !== 'local' || !(changes.speed || changes.bass || changes.reverb)) return;
   const { tabId } = await getState();
   if (tabId == null) return;
   const settings = await getSettings();

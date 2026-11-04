@@ -2,6 +2,8 @@ const DEFAULTS = { speed: 1.25, bass: 4, reverb: 0 };
 const $ = (id) => document.getElementById(id);
 const power = $('power'), status = $('status');
 let tab = null;
+// Opened inside the Spotify page (app window) instead of from the toolbar icon.
+const embeddedTab = Number(new URLSearchParams(location.search).get('tab')) || null;
 
 const fmt = {
   speed: (v) => `${Number(v).toFixed(2)}×`,
@@ -46,13 +48,17 @@ power.addEventListener('click', async () => {
   power.disabled = true;
   try {
     if (power.getAttribute('aria-pressed') === 'true') {
+      await chrome.storage.local.set({ enabled: false });
       await chrome.runtime.sendMessage({ cmd: 'stop' });
       setOn(false);
       showStatus('Off — Spotify plays normally.');
     } else {
       showStatus('Starting…');
-      // Ask for the capture first, while the click still counts as the user's gesture.
-      const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+      await chrome.storage.local.set({ enabled: true });
+      // From the toolbar: ask for the capture first, while the click still counts as the
+      // user's gesture. Embedded in the app window, the background asks for it itself.
+      const streamId = embeddedTab ? null
+        : await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
       const ready = await chrome.tabs.sendMessage(tab.id, { cmd: 'ping' }, { frameId: 0 }).catch(() => null);
       if (!ready) throw new Error('Reload the Spotify tab once (it was open before the extension was installed), then try again.');
       const res = await chrome.runtime.sendMessage({ cmd: 'start', tabId: tab.id, streamId });
@@ -70,7 +76,12 @@ power.addEventListener('click', async () => {
 const isSpotify = (t) => !!t?.url && t.url.startsWith('https://open.spotify.com/');
 
 (async () => {
-  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (embeddedTab) {
+    document.body.classList.add('embedded');
+    tab = await chrome.tabs.get(embeddedTab);
+  } else {
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  }
   render({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
   const state = await chrome.runtime.sendMessage({ cmd: 'status' });
   const onHere = state?.tabId != null && state.tabId === tab?.id;

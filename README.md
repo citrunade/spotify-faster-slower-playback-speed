@@ -20,6 +20,21 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 
+## App window (starts by itself)
+
+A separate window that looks like the Spotify app (no tabs, no address bar) and switches the extension on by itself, with no icon click. It uses its own Chrome profile, so you sign in to Spotify there once.
+
+Normal Chrome only lets an extension capture a tab after you click it. The shortcut starts this profile with a Chrome switch that lifts that rule for this one extension only.
+
+One-time setup:
+1. Run `powershell -ExecutionPolicy Bypass -File setup-app-window.ps1`. It creates the **Spotify Stretch** shortcut (Desktop and Start menu) and a **Spotify Stretch - setup** shortcut.
+2. Open **Spotify Stretch - setup**, go to `chrome://extensions`, turn on **Developer mode**, **Load unpacked** → `C:\SpotifyStretch`. Close that window.
+3. Open **Spotify Stretch**, sign in to Spotify. To pin it, right-click the Start menu entry → Pin to taskbar.
+
+In the window, the small green **×** button (bottom right) opens the settings. Turning it **Off** there is remembered; turn it **On** again to resume auto-start.
+
+The extension ID is tied to the folder path: if you move the folder, re-run the setup script with the new ID.
+
 ## Files
 
 | File | Role |
@@ -28,6 +43,7 @@ While it is on, Chrome shows a "sharing this tab's audio" indicator — that is 
 | `content.js` | Passes the speed from the extension to the page |
 | `background.js` | Starts/stops capture, keeps speed and pitch shift in step |
 | `offscreen.*`, `audio-chain.js` | Captured audio → pitch shift → bass → reverb → speakers |
-| `popup.*` | Controls |
+| `popup.*` | Controls (toolbar popup, or panel inside the app window) |
+| `setup-app-window.ps1` | Creates the app-window shortcuts |
 | `lib/SignalsmithStretch.mjs` | Signalsmith Stretch 1.3.2 (MIT, © Geraint Luff / Signalsmith Audio), from npm `signalsmith-stretch` |
 | `tests/test.html` | Self-test: serve the folder with `python -m http.server` and open `/tests/test.html` |
