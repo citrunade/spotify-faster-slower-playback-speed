@@ -21,7 +21,7 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 
 ### Recently played
 
-The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel, or from the extension panel. Clicking a song opens its album and starts it. Only songs played in the web player after installing are recorded.
+The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel, or from the extension panel. Clicking a song starts it; you stay on the page you were on. Only songs played in the web player after installing are recorded.
 
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 

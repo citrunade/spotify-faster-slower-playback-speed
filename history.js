@@ -51,26 +51,87 @@
     dispatchEvent(new PopStateEvent('popstate', { state: {} }));
   }
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Path of child indexes from root to el, to find "the same" element in a copy or re-render.
+  const pathOf = (root, el) => {
+    const p = [];
+    for (let n = el; n && n !== root; n = n.parentElement) p.unshift([...n.parentElement.children].indexOf(n));
+    return p;
+  };
+  const byPath = (root, p) => p.reduce((n, i) => n?.children[i], root);
+
+  // Lays a frozen copy of the main view over it, so the page switching underneath
+  // (album → play → back) isn't seen. Returns the scroll positions to restore later.
+  function freezeMain() {
+    const main = document.querySelector('main');
+    if (!main) return null;
+    const rect = main.getBoundingClientRect();
+    const scrolled = [main, ...main.querySelectorAll('*')]
+      .filter((e) => e.scrollTop > 0)
+      .map((e) => ({ path: pathOf(main, e), top: e.scrollTop }));
+    const cover = document.createElement('div');
+    cover.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;`
+      + `height:${rect.height}px;overflow:hidden;z-index:2147483646;pointer-events:none;background:#121212;`;
+    const copy = main.cloneNode(true);
+    copy.removeAttribute('id');
+    copy.style.cssText += `;width:${rect.width}px;height:${rect.height}px;margin:0;`;
+    cover.appendChild(copy);
+    document.documentElement.appendChild(cover);
+    for (const s of scrolled) { const e = byPath(copy, s.path); if (e) e.scrollTop = s.top; }
+    return { cover, scrolled };
+  }
+
+  async function unfreezeMain(frozen) {
+    if (!frozen) return;
+    // Give Spotify a moment to re-render the previous page, then put its scroll back.
+    for (let i = 0; i < 10; i++) {
+      await sleep(100);
+      const main = document.querySelector('main');
+      if (!main) continue;
+      for (const s of frozen.scrolled) { const e = byPath(main, s.path); if (e) e.scrollTop = s.top; }
+    }
+    frozen.cover.remove();
+  }
+
+  function findRow(want) {
+    const rows = [...document.querySelectorAll('[data-testid="tracklist-row"]')];
+    const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
+    return {
+      any: rows.length > 0,
+      row: rows.find((r) => titleOf(r) === want)
+        || rows.find((r) => { const t = titleOf(r); return t && (want.startsWith(t) || t.startsWith(want)); }),
+    };
+  }
+
+  const pressPlay = (row) =>
+    [...row.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''))?.click();
+
   async function play(entry) {
     if (!entry.albumUrl) {
       navigate(`/search/${encodeURIComponent(`${entry.title} ${entry.artist}`)}`);
       return;
     }
-    navigate(entry.albumUrl);
     const want = norm(entry.title);
+    const onAlbum = location.pathname === entry.albumUrl;
+    // Already on that album: just press play, nothing to hide.
+    if (onAlbum) { const { row } = findRow(want); if (row) { pressPlay(row); return; } }
+
+    const frozen = onAlbum ? null : freezeMain();
+    navigate(entry.albumUrl);
+    let played = false;
     for (let i = 0; i < 40; i++) { // wait up to ~8 s for the album's track list
-      await new Promise((r) => setTimeout(r, 200));
-      const rows = [...document.querySelectorAll('[data-testid="tracklist-row"]')];
-      if (!rows.length) continue;
-      const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
-      const row = rows.find((r) => titleOf(r) === want)
-        || rows.find((r) => { const t = titleOf(r); return t && (want.startsWith(t) || t.startsWith(want)); });
-      if (!row) { if (i > 15) return; continue; }
-      row.scrollIntoView({ block: 'center' });
-      const btn = [...row.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''));
-      btn?.click();
-      return;
+      await sleep(200);
+      const { any, row } = findRow(want);
+      if (!any) continue;
+      if (!row) { if (i > 15) break; continue; }
+      pressPlay(row);
+      played = true;
+      break;
     }
+    // Played: go back to where the user was. Not found: stay on the album so they can pick it.
+    if (played && !onAlbum) history.back();
+    await unfreezeMain(frozen);
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
