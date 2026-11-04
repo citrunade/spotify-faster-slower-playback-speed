@@ -16,7 +16,7 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 1. Open https://open.spotify.com and play something.
 2. Click the extension icon, press **Off** so it turns **On**.
 3. Pick a speed: 0.5–2× (presets 0.75–0.9 slowed, 1.1–1.5 sped up), plus bass and reverb. Changes apply live and are remembered.
-4. **Pitch**: shift up or down by up to 12 semitones (pitch stays original otherwise). **Tape mode** lets the pitch follow the speed instead: slowed sounds deeper, sped up sounds higher (classic "slowed + reverb" / nightcore). The pitch knob adds on top.
+4. **Pitch**: the slider shows the pitch shift being applied. With tape mode off it moves automatically to cancel the speed change (e.g. −3.9 st at 1.25×), so songs keep their original pitch; drag it to go higher or lower, **Reset pitch** returns to automatic. **Tape mode** turns the correction off so pitch follows speed: slowed sounds deeper, sped up sounds higher (classic "slowed + reverb" / nightcore).
 5. Press **On** again to go back to normal Spotify.
 
 ### Recently played

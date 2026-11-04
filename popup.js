@@ -8,7 +8,7 @@ const embeddedTab = Number(new URLSearchParams(location.search).get('tab')) || n
 
 const fmt = {
   speed: (v) => `${Number(v).toFixed(2)}×`,
-  pitch: (v) => (Number(v) === 0 ? '0 st' : `${v > 0 ? '+' : ''}${Number(v)} st`),
+  pitch: (v) => { const r = Math.round(v * 10) / 10; return r === 0 ? '0 st' : `${r > 0 ? '+' : ''}${r.toFixed(1)} st`; },
   bass: (v) => `+${Number(v).toFixed(1)} dB`,
   reverb: (v) => `${Math.round(v * 100)}%`,
 };
@@ -18,14 +18,20 @@ function showStatus(text, error = false) {
   status.classList.toggle('error', error);
 }
 
+// Pitch slider shows the shift actually applied: the automatic correction for the speed
+// (none in tape mode) plus the user's own offset, which is what gets stored.
+const autoShift = (s) => (s.tape ? 0 : -12 * Math.log2(s.speed));
+const shownPitch = (s) => autoShift(s) + Number(s.pitch || 0);
+
 function render(settings) {
   $('tape').checked = !!settings.tape;
   $('pitchHint').textContent = settings.tape
     ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher).'
-    : 'Pitch stays original at any speed. Shift it here.';
+    : `Pitch is moved ${autoShift(settings) <= 0 ? 'down' : 'up'} automatically to cancel the speed change, so it sounds original. Drag to adjust; Reset goes back to automatic.`;
   for (const k of Object.keys(SLIDERS)) {
-    $(k).value = settings[k];
-    $(k + 'Out').textContent = fmt[k](settings[k]);
+    const v = k === 'pitch' ? shownPitch(settings) : settings[k];
+    $(k).value = v;
+    $(k + 'Out').textContent = fmt[k](v);
   }
   document.querySelectorAll('.presets button').forEach((b) =>
     b.classList.toggle('active', Math.abs(Number(b.dataset.speed) - settings.speed) < 0.001));
@@ -45,7 +51,11 @@ async function save(patch) {
 }
 
 for (const k of Object.keys(SLIDERS)) {
-  $(k).addEventListener('input', (e) => save({ [k]: Number(e.target.value) }));
+  $(k).addEventListener('input', (e) => {
+    const v = Number(e.target.value);
+    // Slider value is the total shift; store only the part on top of the automatic one.
+    save({ [k]: k === 'pitch' ? Math.round((v - autoShift(current)) * 100) / 100 : v });
+  });
 }
 $('tape').addEventListener('change', (e) => save({ tape: e.target.checked }));
 $('pitchReset').addEventListener('click', () => save({ pitch: 0 }));
