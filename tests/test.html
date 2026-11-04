@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Spotify Stretch self-test</title>
+<style>body{font:14px system-ui;padding:16px} pre{background:#eee;padding:8px}</style>
+<h1>Spotify Stretch self-test</h1>
+<p>Serve the repo root over http (e.g. <code>python -m http.server</code>) and open /tests/test.html.</p>
+<button id="run">Run audio test</button>
+<button id="rate">Run speed-script test</button>
+<pre id="log"></pre>
+<audio id="a" src="tone.wav" preload="auto"></audio>
+<script src="../page-rate.js"></script>
+<script type="module">
+import { buildChain, semitonesFor } from '../audio-chain.js';
+const log = (...a) => { document.getElementById('log').textContent += a.join(' ') + '\n'; };
+window.results = {};
+
+function peakHz(analyser, ctx) {
+  const bins = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(bins);
+  let best = 0;
+  for (let i = 1; i < bins.length; i++) if (bins[i] > bins[best]) best = i;
+  return { hz: best * ctx.sampleRate / analyser.fftSize, db: bins[best] };
+}
+
+document.getElementById('run').onclick = async () => {
+  const ctx = new AudioContext({ latencyHint: 'playback' });
+  await ctx.resume();
+  const osc = ctx.createOscillator();
+  osc.frequency.value = 440;
+  const speed = 1.25;
+  const t0 = performance.now();
+  const chain = await buildChain(ctx, osc, { speed, bass: 4, reverb: 0.3 });
+  log('worklet ready in', Math.round(performance.now() - t0), 'ms; latency', chain.latency.toFixed(3), 's');
+  const an = ctx.createAnalyser();
+  an.fftSize = 32768;
+  chain.stretch.connect(an);
+  osc.start();
+  await new Promise((r) => setTimeout(r, 2000));
+  const p = peakHz(an, ctx);
+  const expect = 440 * Math.pow(2, semitonesFor(speed) / 12);
+  log(`input 440 Hz, shift ${semitonesFor(speed).toFixed(3)} st -> peak ${p.hz.toFixed(1)} Hz (${p.db.toFixed(1)} dB), expected ${expect.toFixed(1)} Hz`);
+  chain.apply({ speed: 1.5, bass: 0, reverb: 0 });
+  await new Promise((r) => setTimeout(r, 1500));
+  const p2 = peakHz(an, ctx);
+  log(`after speed 1.5 -> peak ${p2.hz.toFixed(1)} Hz, expected ${(440 / 1.5).toFixed(1)} Hz`);
+  window.results.audio = { p1: p.hz, e1: expect, p2: p2.hz, e2: 440 / 1.5, latency: chain.latency };
+  osc.stop(); chain.disconnect(); ctx.close();
+};
+
+document.getElementById('rate').onclick = async () => {
+  const a = document.getElementById('a');
+  a.volume = 0.2;
+  const set = (r) => document.dispatchEvent(new CustomEvent('spotifystretch:rate', { detail: r }));
+  const measure = async () => { const c0 = a.currentTime, w0 = performance.now();
+    await new Promise((r) => setTimeout(r, 1500));
+    return (a.currentTime - c0) / ((performance.now() - w0) / 1000); };
+  a.playbackRate = 1;
+  await a.play();
+  set(1.3);
+  a.playbackRate = 1;           // page tries to reset it
+  a.src = 'tone.wav?reload';    // new track: browser resets to defaultPlaybackRate
+  await a.play();
+  const on = { pageSees: a.playbackRate, preservesPitch: a.preservesPitch, realRate: await measure() };
+  log('forced 1.3 ->', JSON.stringify(on));
+  set(1);
+  const off = { pageSees: a.playbackRate, preservesPitch: a.preservesPitch, realRate: await measure() };
+  log('off ->', JSON.stringify(off));
+  a.pause();
+  window.results.rate = { on, off };
+};
+</script>
