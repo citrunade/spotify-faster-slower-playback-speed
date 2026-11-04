@@ -67,7 +67,10 @@ power.addEventListener('click', async () => {
     }
   } catch (e) {
     setOn(false);
-    showStatus(String(e.message || e), true);
+    let text = String(e.message || e);
+    // Normal Chrome window: capture needs a click on the toolbar icon first.
+    if (embeddedTab && /invoked|activeTab/i.test(text)) text = 'In a normal Chrome window, click the Spotify Stretch icon in the toolbar to turn it on.';
+    showStatus(text, true);
   } finally {
     power.disabled = !isSpotify(tab);
   }

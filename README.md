@@ -31,7 +31,7 @@ One-time setup:
 2. Open **Spotify Stretch - setup**, go to `chrome://extensions`, turn on **Developer mode**, **Load unpacked** → `C:\SpotifyStretch`. Close that window.
 3. Open **Spotify Stretch**, sign in to Spotify. To pin it, right-click the Start menu entry → Pin to taskbar.
 
-In the window, the small green **×** button (bottom right) opens the settings. Turning it **Off** there is remembered; turn it **On** again to resume auto-start.
+In the player bar (next to the queue and volume buttons) there is a speed button, e.g. **1.25×**: green when on. Click it for the settings. Turning it **Off** there is remembered; turn it **On** again to resume auto-start.
 
 The extension ID is tied to the folder path: if you move the folder, re-run the setup script with the new ID.
 
