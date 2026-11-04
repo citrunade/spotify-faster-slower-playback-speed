@@ -22,7 +22,7 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 
 ### Recently played
 
-The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel, or from the extension panel. Click a song to play it; you stay on the page you were on. Right-click it (or hover and click **⋯**) for the desktop-style menu: Add to queue, Add to Liked Songs, Go to song radio, Go to album, Go to artist, Remove from history. These work through Spotify's own song menu on the song's album page, opened out of sight, so they rely on Spotify's English menu labels. Only songs played in the web player after installing are recorded.
+The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel. Click a song to play it; you stay on the page you were on. Right-click it (or hover and click **⋯**) for the desktop-style menu: Add to queue, Add to Liked Songs, Go to song radio, Go to album, Go to artist, Remove from history. These work through Spotify's own song menu on the song's album page, opened out of sight, so they rely on Spotify's English menu labels. Only songs played in the web player after installing are recorded.
 
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 
@@ -48,7 +48,7 @@ The extension ID is tied to the folder path: if you move the folder, re-run the 
 | `page-rate.js` | Runs inside Spotify; forces the speed with pitch keeping off |
 | `content.js` | Passes the speed from the extension to the page; speed button in the player bar |
 | `history.js`, `history-render.js` | Recently played: records songs, queue-panel tab, play from history |
-| `background.js` | Starts/stops capture, keeps speed and pitch shift in step |
+| `service-worker.js` | Starts/stops capture, keeps speed and pitch shift in step |
 | `drum-tail-worklet.js` | Drum tail effect (longer decay after each hit) |
 | `offscreen.*`, `audio-chain.js` | Captured audio → pitch shift → bass → reverb → speakers |
 | `popup.*` | Controls (toolbar popup, or panel inside the app window) |

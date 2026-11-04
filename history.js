@@ -233,14 +233,6 @@
     busy = false;
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.cmd === 'historyAction' && msg.entry) act(msg.action, msg.entry);
-  });
-  const extOrigin = new URL(chrome.runtime.getURL('')).origin;
-  window.addEventListener('message', (e) => {
-    const d = e.data?.spotifyStretchAction;
-    if (e.origin === extOrigin && d?.entry) act(d.action, d.entry);
-  });
 
   // ---- "Recently played" tab in the queue panel -------------------------------------
   // Panel layout: aside[aria-label=Queue] > root > [header row (title + close), body (queue list)]

@@ -37,13 +37,28 @@ async function stop() {
 
 // streamId comes from the popup (user click). Without one we ask ourselves, which only
 // works when Chrome was launched with --allowlisted-extension-id (the app window shortcut).
-async function start(tabId, streamId) {
+// Bumped when this file changes, so the panel can tell when Chrome still runs an older copy.
+const WORKER = 3;
+const START_TIMEOUT_MS = 15000;
+
+// One start at a time: a page hello and a panel click arriving together must not race.
+let starting = null;
+function start(tabId, streamId) {
+  if (!starting) starting = startNow(tabId, streamId).finally(() => { starting = null; });
+  return starting;
+}
+
+async function startNow(tabId, streamId) {
   const state = await getState();
   if (state.tabId != null) await stop();
   if (!streamId) streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
   await ensureOffscreen();
   const settings = await getSettings();
-  const res = await chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'start', streamId, settings });
+  // If the audio side never answers, the tab stays captured (and silent): give up and release it.
+  const res = await Promise.race([
+    chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'start', streamId, settings }),
+    new Promise((r) => setTimeout(() => r({ ok: false, error: 'Audio processing did not start in time' }), START_TIMEOUT_MS)),
+  ]);
   if (!res?.ok) {
     await stop();
     throw new Error(res?.error || 'Audio processing failed to start');
@@ -64,7 +79,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
           throw e;
         });
       case 'stop': await stop(); return { ok: true };
-      case 'status': return getState();
+      case 'status': return { ...(await getState()), worker: WORKER };
       case 'hello': return hello(sender);
       case 'ended': await stop(); return { ok: true };
     }

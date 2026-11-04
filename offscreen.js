@@ -5,6 +5,15 @@ let ctx = null, stream = null, chain = null;
 
 async function start(streamId, settings) {
   await stop();
+  try {
+    return await startChain(streamId, settings);
+  } catch (e) {
+    await stop(); // don't leave the tab captured (and silent) after a failure
+    throw e;
+  }
+}
+
+async function startChain(streamId, settings) {
   stream = await navigator.mediaDevices.getUserMedia({
     audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
     video: false,

@@ -44,6 +44,19 @@ function makeBloomImpulse(ctx, seconds = 1.2) {
   return buf;
 }
 
+// Drum tail: noise fading over ~0.7 s (no early gap, so it sounds like the hit itself lasting).
+function makeTailImpulse(ctx, seconds = 0.7) {
+  const rate = ctx.sampleRate;
+  const len = Math.floor(rate * seconds);
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3) * TAIL_LEVEL;
+  }
+  return buf;
+}
+const TAIL_LEVEL = 0.04;
+
 export async function buildChain(ctx, input, settings) {
   const stretch = await SignalsmithStretch(ctx, {
     numberOfInputs: 1,
@@ -91,8 +104,8 @@ export async function buildChain(ctx, input, settings) {
   const bloom = ctx.createGain();
   bass.connect(bloomSplit).connect(bloomVerb).connect(bloom).connect(limiter);
 
-  // Drum tail: drum ranges only (snare body ~220 Hz, crack/hats above 5 kHz, kick below 120 Hz)
-  // go through a transient sustainer that lets hits decay longer.
+  // Drum tail: drum ranges only (snare body ~220 Hz, crack/hats above 5 kHz, kick below 120 Hz).
+  // The worklet passes only the hit fronts; a short decaying tail is added to each of them.
   await ctx.audioWorklet.addModule(new URL('./drum-tail-worklet.js', import.meta.url).href);
   const tail = new AudioWorkletNode(ctx, 'drum-tail', { outputChannelCount: [2] });
   const drumIn = ctx.createGain();
@@ -100,7 +113,10 @@ export async function buildChain(ctx, input, settings) {
   const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 220; body.Q.value = 0.8;
   const crack = ctx.createBiquadFilter(); crack.type = 'highpass'; crack.frequency.value = 5000;
   for (const f of [kick, body, crack]) { bass.connect(f); f.connect(drumIn); }
-  drumIn.connect(tail).connect(limiter);
+  const tailVerb = ctx.createConvolver();
+  tailVerb.normalize = false;
+  tailVerb.buffer = makeTailImpulse(ctx);
+  drumIn.connect(tail).connect(tailVerb).connect(limiter);
 
   stretch.start();
 

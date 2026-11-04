@@ -102,27 +102,6 @@ power.addEventListener('click', async () => {
   }
 });
 
-// ---- Recently played -----------------------------------------------------------
-async function renderHistory() {
-  const { history = [] } = await chrome.storage.local.get('history');
-  $('historyList').replaceChildren(ssBuildHistoryList(history, pickHistory, null));
-}
-function pickHistory(action, entry) {
-  if (embeddedTab) parent.postMessage({ spotifyStretchAction: { action, entry } }, '*');
-  else if (isSpotify(tab)) { chrome.tabs.sendMessage(tab.id, { cmd: 'historyAction', action, entry }).catch(() => {}); window.close(); }
-}
-function showView(history) {
-  $('viewHistory').hidden = !history;
-  $('viewSettings').hidden = history;
-  $('tabHistory').classList.toggle('active', history);
-  $('tabSettings').classList.toggle('active', !history);
-  if (history) renderHistory();
-}
-$('tabSettings').addEventListener('click', () => showView(false));
-$('tabHistory').addEventListener('click', () => showView(true));
-$('historyClear').addEventListener('click', async () => { await chrome.storage.local.set({ history: [] }); renderHistory(); });
-chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.history && !$('viewHistory').hidden) renderHistory(); });
-
 $('version').textContent = `v${chrome.runtime.getManifest().version}`;
 // Re-reads the extension from disk; the background reloads Spotify tabs afterwards.
 $('reloadExt').addEventListener('click', () => chrome.runtime.reload());
@@ -139,6 +118,11 @@ const isSpotify = (t) => !!t?.url && t.url.startsWith('https://open.spotify.com/
   current = { ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) };
   render(current);
   const state = await chrome.runtime.sendMessage({ cmd: 'status' });
+  // Chrome can keep running an old copy of the background after the files change.
+  if (state && state.worker == null) {
+    showStatus('An old copy of the extension is still running. Click "Reload extension" below.', true);
+    return;
+  }
   const onHere = state?.tabId != null && state.tabId === tab?.id;
   setOn(onHere, state?.latency);
   if (!isSpotify(tab)) {
