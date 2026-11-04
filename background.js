@@ -121,5 +121,14 @@ chrome.tabs.onRemoved.addListener(async (closedId) => {
   if (closedId === tabId) stop();
 });
 
+// After an install, update or "Reload extension", open Spotify pages still talk to the old
+// copy; reload them so they pick up the new one (and auto-start again in the app window).
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== 'update') return;
+  await chrome.storage.session.set({ tabId: null, latency: null }); // capture ended with the old copy
+  const tabs = await chrome.tabs.query({ url: 'https://open.spotify.com/*' });
+  for (const t of tabs) chrome.tabs.reload(t.id).catch(() => {});
+});
+
 // A fresh browser session never has a live capture.
 chrome.runtime.onStartup.addListener(() => chrome.storage.session.set({ tabId: null, latency: null }));

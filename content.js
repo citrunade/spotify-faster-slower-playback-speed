@@ -32,13 +32,22 @@ chrome.storage.onChanged.addListener((c, area) => {
   if (area === 'local' && c.speed) { ui.speed = c.speed.newValue; ui.render(); }
 });
 
-chrome.runtime.sendMessage({ cmd: 'hello' })
-  .then((r) => {
-    ui.tabId = r?.tabId ?? null;
-    if (r?.rate && r.rate !== 1) setRate(r.rate);
-    if (window === window.top && ui.tabId != null) watchPlayerBar();
-  })
-  .catch(() => {});
+// Say hello to the background (which auto-starts the audio). Right after Chrome starts or the
+// extension reloads, the background may not be ready yet and the message gets lost: retry.
+(async () => {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      const r = await chrome.runtime.sendMessage({ cmd: 'hello' });
+      if (r?.tabId != null) {
+        ui.tabId = r.tabId;
+        if (r.rate && r.rate !== 1) setRate(r.rate);
+        if (window === window.top) watchPlayerBar();
+        return;
+      }
+    } catch {}
+    await new Promise((res) => setTimeout(res, 500 * (attempt + 1)));
+  }
+})();
 
 function makeButton(template) {
   const btn = document.createElement('button');

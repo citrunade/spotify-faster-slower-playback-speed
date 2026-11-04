@@ -123,6 +123,10 @@ $('tabHistory').addEventListener('click', () => showView(true));
 $('historyClear').addEventListener('click', async () => { await chrome.storage.local.set({ history: [] }); renderHistory(); });
 chrome.storage.onChanged.addListener((c, area) => { if (area === 'local' && c.history && !$('viewHistory').hidden) renderHistory(); });
 
+$('version').textContent = `v${chrome.runtime.getManifest().version}`;
+// Re-reads the extension from disk; the background reloads Spotify tabs afterwards.
+$('reloadExt').addEventListener('click', () => chrome.runtime.reload());
+
 const isSpotify = (t) => !!t?.url && t.url.startsWith('https://open.spotify.com/');
 
 (async () => {
