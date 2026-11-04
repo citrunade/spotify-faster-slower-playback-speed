@@ -36,6 +36,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg.cmd === 'start') return start(msg.streamId, msg.settings);
     if (msg.cmd === 'stop') { await stop(); return { ok: true }; }
     if (msg.cmd === 'settings') { chain?.apply(msg.settings); return { ok: true }; }
+    if (msg.cmd === 'diag') return chain ? { ok: true, ...chain.diag() } : { ok: false, error: 'no audio chain' };
   })().then(
     (r) => reply(r ?? { ok: true }),
     (e) => reply({ ok: false, error: String(e?.message || e) }),

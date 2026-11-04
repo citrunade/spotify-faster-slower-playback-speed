@@ -31,6 +31,18 @@ export async function buildChain(ctx, input, settings) {
     outputChannelCount: [2],
   });
   input.connect(stretch);
+  // Level meters for diagnostics (input before, output after pitch correction).
+  const meterIn = ctx.createAnalyser(), meterOut = ctx.createAnalyser();
+  meterIn.fftSize = meterOut.fftSize = 2048;
+  input.connect(meterIn);
+  stretch.connect(meterOut);
+  const level = (an) => {
+    const b = new Float32Array(an.fftSize); an.getFloatTimeDomainData(b);
+    let s = 0; for (const v of b) s += v * v;
+    const rms = Math.sqrt(s / b.length);
+    return rms > 0 ? Math.round(20 * Math.log10(rms)) : -999;
+  };
+  let applied = null;
 
   const bass = ctx.createBiquadFilter();
   bass.type = 'lowshelf';
@@ -49,6 +61,7 @@ export async function buildChain(ctx, input, settings) {
   const apply = (s, smooth = true) => {
     const t = ctx.currentTime;
     const set = (p, v) => (smooth ? p.setTargetAtTime(v, t, 0.05) : (p.value = v));
+    applied = { semitones: Math.round(shiftFor(s) * 100) / 100, speed: s.speed, pitch: s.pitch, tape: !!s.tape };
     stretch.schedule({ semitones: shiftFor(s) });
     set(bass.gain, s.bass);
     const r = Math.max(0, Math.min(1, s.reverb));
@@ -62,6 +75,7 @@ export async function buildChain(ctx, input, settings) {
     stretch,
     latency,
     apply,
+    diag: () => ({ ctx: ctx.state, inDb: level(meterIn), outDb: level(meterOut), applied }),
     disconnect() {
       try { input.disconnect(); } catch {}
       try { stretch.stop(); stretch.disconnect(); } catch {}

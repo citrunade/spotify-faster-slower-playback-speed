@@ -50,6 +50,7 @@ async function start(tabId, streamId) {
   }
   await chrome.storage.session.set({ tabId, latency: res.latency });
   sendRate(tabId, settings.speed);
+  saveDiag('start');
   return res;
 }
 
@@ -86,6 +87,16 @@ async function hello(sender) {
   return { rate: tabId === tab.id ? settings.speed : 1, tabId: tab.id, appWindow };
 }
 
+// Snapshot of the audio side, stored so problems can be diagnosed afterwards.
+async function saveDiag(reason) {
+  await new Promise((r) => setTimeout(r, 1500));
+  let audio;
+  try { audio = await chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'diag' }); }
+  catch (e) { audio = { ok: false, error: String(e.message || e) }; }
+  const { tabId } = await getState();
+  await chrome.storage.local.set({ audioDiag: { at: Date.now(), reason, tabId, offscreen: await hasOffscreen(), audio } });
+}
+
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local' || !(changes.speed || changes.pitch || changes.tape || changes.bass || changes.reverb)) return;
   const { tabId } = await getState();
@@ -95,6 +106,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     chrome.runtime.sendMessage({ target: 'offscreen', cmd: 'settings', settings }).catch(() => {});
   }
   if (changes.speed) sendRate(tabId, settings.speed);
+  saveDiag(Object.keys(changes).join(','));
 });
 
 chrome.tabs.onRemoved.addListener(async (closedId) => {
