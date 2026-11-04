@@ -172,7 +172,7 @@
   // What each action does once the song's row is found. Returns a short result string.
   const ACTIONS = {
     play: async (row) => {
-      const btn = rowButton(row, /^Playb/);
+      const btn = rowButton(row, /^Play\b/);
       if (btn) btn.click();
       else row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
       return 'ok';
