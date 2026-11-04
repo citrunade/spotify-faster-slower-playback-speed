@@ -17,7 +17,8 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 2. Click the extension icon, press **Off** so it turns **On**.
 3. Pick a speed: 0.5–2× (presets 0.75–0.9 slowed, 1.1–1.5 sped up), plus bass and reverb. Changes apply live and are remembered.
 4. **Pitch**: the slider shows how the song sounds compared with the original (0 st = original). With tape mode off it stays at 0 at any speed; drag to shift higher or lower. **Tape mode** lets pitch follow speed (slowed sounds deeper, sped up sounds higher, the classic "slowed + reverb" / nightcore), and the slider moves with the speed (e.g. +3.9 st at 1.25×). **Reset pitch** removes your own shift.
-5. Press **On** again to go back to normal Spotify.
+5. **Low bloom** makes the bass and kick ring longer and blend into each other; **Drum tail** makes drum hits fade out slower (drum frequency ranges only). Both start at 0. A limiter at the end keeps stacked effects from distorting.
+6. Press **On** again to go back to normal Spotify.
 
 ### Recently played
 
@@ -48,6 +49,7 @@ The extension ID is tied to the folder path: if you move the folder, re-run the 
 | `content.js` | Passes the speed from the extension to the page; speed button in the player bar |
 | `history.js`, `history-render.js` | Recently played: records songs, queue-panel tab, play from history |
 | `background.js` | Starts/stops capture, keeps speed and pitch shift in step |
+| `drum-tail-worklet.js` | Drum tail effect (longer decay after each hit) |
 | `offscreen.*`, `audio-chain.js` | Captured audio → pitch shift → bass → reverb → speakers |
 | `popup.*` | Controls (toolbar popup, or panel inside the app window) |
 | `setup-app-window.ps1` | Creates the app-window shortcuts |

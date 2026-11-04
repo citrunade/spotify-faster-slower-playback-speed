@@ -6,6 +6,7 @@
 <p>Serve the repo root over http (e.g. <code>python -m http.server</code>) and open /tests/test.html.</p>
 <button id="run">Run audio test</button>
 <button id="rate">Run speed-script test</button>
+<button id="drums">Run drum test</button>
 <pre id="log"></pre>
 <audio id="a" src="tone.wav" preload="auto"></audio>
 <script src="../page-rate.js"></script>
@@ -54,6 +55,49 @@ document.getElementById('run').onclick = async () => {
     log(`${JSON.stringify(s)} -> peak ${q.hz.toFixed(1)} Hz, expected ${exp.toFixed(1)} Hz`);
   }
   osc.stop(); chain.disconnect(); ctx.close();
+};
+
+// Drum loop: kick every 0.5 s, hat every 0.25 s. "Fill" = average level between hits relative
+// to the loudest moment; low bloom and drum tail should raise it.
+document.getElementById('drums').onclick = async () => {
+  const ctx = new AudioContext({ latencyHint: 'playback' });
+  await ctx.resume();
+  const sr = ctx.sampleRate, len = sr * 2;
+  const loop = ctx.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = loop.getChannelData(c);
+    for (let k = 0; k < 4; k++) { // kicks
+      const s0 = k * sr / 2;
+      for (let i = 0; i < sr * 0.18; i++) d[s0 + i] += 0.8 * Math.sin(2 * Math.PI * (55 + 60 * Math.exp(-i / (sr * 0.02))) * i / sr) * Math.exp(-i / (sr * 0.05));
+    }
+    for (let h = 0; h < 8; h++) { // hats
+      const s0 = h * sr / 4 + sr / 8;
+      let prev = 0;
+      for (let i = 0; i < sr * 0.04; i++) { const n = Math.random() * 2 - 1; d[s0 + i] += 0.3 * (n - prev) * Math.exp(-i / (sr * 0.008)); prev = n; }
+    }
+  }
+  const src = ctx.createBufferSource(); src.buffer = loop; src.loop = true;
+  const chain = await buildChain(ctx, src, { speed: 1, pitch: 0, bass: 0, reverb: 0, bloom: 0, tail: 0 });
+  const an = ctx.createAnalyser(); an.fftSize = 512; chain.output.connect(an);
+  src.start();
+  // Share of time the output stays within 20 dB / 40 dB of its peak: longer tails = higher.
+  const fill = async () => {
+    const vals = []; const b = new Float32Array(an.fftSize);
+    for (let i = 0; i < 300; i++) { await new Promise((r) => setTimeout(r, 10)); an.getFloatTimeDomainData(b); let s = 0; for (const v of b) s += v * v; vals.push(Math.sqrt(s / b.length)); }
+    const peak = Math.max(...vals);
+    const share = (db) => +(vals.filter((v) => v > peak * Math.pow(10, -db / 20)).length / vals.length).toFixed(2);
+    return { fill: `${share(20)} within 20 dB, ${share(40)} within 40 dB`, peak: +peak.toFixed(3) };
+  };
+  await new Promise((r) => setTimeout(r, 800));
+  const res = {};
+  for (const [name, s] of [['off', {}], ['bloom 100%', { bloom: 1 }], ['tail 100%', { tail: 1 }], ['both 100%', { bloom: 1, tail: 1 }], ['off again', {}]]) {
+    chain.apply({ speed: 1, pitch: 0, bass: 0, reverb: 0, bloom: 0, tail: 0, ...s });
+    await new Promise((r) => setTimeout(r, 1200));
+    res[name] = await fill();
+    log(`${name}: ${res[name].fill} (peak ${res[name].peak})`);
+  }
+  window.results.drums = res;
+  src.stop(); chain.disconnect(); ctx.close();
 };
 
 document.getElementById('rate').onclick = async () => {

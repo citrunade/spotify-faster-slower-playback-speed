@@ -40,3 +40,5 @@ label.check input { accent-color: var(--accent); margin: 0; }
 .tabs button.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
 .history { max-height: 380px; overflow-y: auto; margin: 8px -8px; }
 #historyClear { margin-top: 4px; }
+label.second { margin-top: 8px; }
+html, body { overflow-x: hidden; }

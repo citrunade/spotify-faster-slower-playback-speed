@@ -1,4 +1,4 @@
-const SLIDERS = { speed: 1.25, pitch: 0, bass: 4, reverb: 0 };
+const SLIDERS = { speed: 1.25, pitch: 0, bass: 4, bloom: 0, tail: 0, reverb: 0 };
 const DEFAULTS = { ...SLIDERS, tape: false };
 const $ = (id) => document.getElementById(id);
 const power = $('power'), status = $('status');
@@ -11,6 +11,8 @@ const fmt = {
   pitch: (v) => { const r = Math.round(v * 10) / 10; return r === 0 ? '0 st' : `${r > 0 ? '+' : ''}${r.toFixed(1)} st`; },
   bass: (v) => `+${Number(v).toFixed(1)} dB`,
   reverb: (v) => `${Math.round(v * 100)}%`,
+  bloom: (v) => `${Math.round(v * 100)}%`,
+  tail: (v) => `${Math.round(v * 100)}%`,
 };
 
 function showStatus(text, error = false) {
