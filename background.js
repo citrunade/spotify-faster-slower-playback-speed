@@ -58,7 +58,11 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.target === 'offscreen') return false;
   (async () => {
     switch (msg?.cmd) {
-      case 'start': return start(msg.tabId, msg.streamId);
+      case 'start':
+        return start(msg.tabId, msg.streamId).catch((e) => {
+          chrome.storage.local.set({ lastStartError: { at: Date.now(), auto: false, error: String(e?.message || e) } });
+          throw e;
+        });
       case 'stop': await stop(); return { ok: true };
       case 'status': return getState();
       case 'hello': return hello(sender);
@@ -82,7 +86,10 @@ async function hello(sender) {
   const { tabId } = await getState();
   if (tabId == null && settings.enabled && sender.frameId === 0) {
     // Don't make the page wait: start() sends the speed to the tab once audio is running.
-    start(tab.id).catch(() => { /* normal Chrome: needs the icon click */ });
+    start(tab.id).catch((e) => {
+      // In normal Chrome this is expected (needs the icon click); keep it for diagnosis anyway.
+      chrome.storage.local.set({ lastStartError: { at: Date.now(), auto: true, error: String(e?.message || e) } });
+    });
   }
   return { rate: tabId === tab.id ? settings.speed : 1, tabId: tab.id, appWindow };
 }
