@@ -1,7 +1,7 @@
 // Service worker: owns the capture state and keeps the page speed and the
 // offscreen pitch correction in step.
 
-const DEFAULTS = { speed: 1.25, bass: 4, reverb: 0, enabled: true };
+const DEFAULTS = { speed: 1.25, pitch: 0, tape: false, bass: 4, reverb: 0, enabled: true };
 
 const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
 const getState = async () => chrome.storage.session.get({ tabId: null, latency: null });
@@ -87,7 +87,7 @@ async function hello(sender) {
 }
 
 chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== 'local' || !(changes.speed || changes.bass || changes.reverb)) return;
+  if (area !== 'local' || !(changes.speed || changes.pitch || changes.tape || changes.bass || changes.reverb)) return;
   const { tabId } = await getState();
   if (tabId == null) return;
   const settings = await getSettings();

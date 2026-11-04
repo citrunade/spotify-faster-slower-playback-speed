@@ -1,4 +1,5 @@
-const DEFAULTS = { speed: 1.25, bass: 4, reverb: 0 };
+const SLIDERS = { speed: 1.25, pitch: 0, bass: 4, reverb: 0 };
+const DEFAULTS = { ...SLIDERS, tape: false };
 const $ = (id) => document.getElementById(id);
 const power = $('power'), status = $('status');
 let tab = null;
@@ -7,6 +8,7 @@ const embeddedTab = Number(new URLSearchParams(location.search).get('tab')) || n
 
 const fmt = {
   speed: (v) => `${Number(v).toFixed(2)}×`,
+  pitch: (v) => (Number(v) === 0 ? '0 st' : `${v > 0 ? '+' : ''}${Number(v)} st`),
   bass: (v) => `+${Number(v).toFixed(1)} dB`,
   reverb: (v) => `${Math.round(v * 100)}%`,
 };
@@ -17,7 +19,11 @@ function showStatus(text, error = false) {
 }
 
 function render(settings) {
-  for (const k of Object.keys(DEFAULTS)) {
+  $('tape').checked = !!settings.tape;
+  $('pitchHint').textContent = settings.tape
+    ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher).'
+    : 'Pitch stays original at any speed. Shift it here.';
+  for (const k of Object.keys(SLIDERS)) {
     $(k).value = settings[k];
     $(k + 'Out').textContent = fmt[k](settings[k]);
   }
@@ -31,15 +37,22 @@ function setOn(on, latency) {
   if (on) showStatus(latency ? `Running — about ${latency.toFixed(2)} s delay` : 'Running');
 }
 
+let current = { ...DEFAULTS };
 async function save(patch) {
-  const current = { ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) };
-  const next = { ...current, ...patch };
-  render(next);
+  current = { ...current, ...patch };
+  render(current);
   await chrome.storage.local.set(patch);
 }
 
-for (const k of Object.keys(DEFAULTS)) {
+for (const k of Object.keys(SLIDERS)) {
   $(k).addEventListener('input', (e) => save({ [k]: Number(e.target.value) }));
+}
+$('tape').addEventListener('change', (e) => save({ tape: e.target.checked }));
+$('pitchReset').addEventListener('click', () => save({ pitch: 0 }));
+// Inside the Spotify page the panel is an iframe: tell it how tall to be.
+if (embeddedTab) {
+  new ResizeObserver(() => parent.postMessage({ spotifyStretchHeight: document.body.scrollHeight + 32 }, '*'))
+    .observe(document.body);
 }
 document.querySelectorAll('.presets button').forEach((b) =>
   b.addEventListener('click', () => save({ speed: Number(b.dataset.speed) })));
@@ -85,7 +98,8 @@ const isSpotify = (t) => !!t?.url && t.url.startsWith('https://open.spotify.com/
   } else {
     [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   }
-  render({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
+  current = { ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) };
+  render(current);
   const state = await chrome.runtime.sendMessage({ cmd: 'status' });
   const onHere = state?.tabId != null && state.tabId === tab?.id;
   setOn(onHere, state?.latency);

@@ -29,3 +29,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 2px;
 }
 .presets button.active { border-color: var(--accent); color: var(--accent); }
 body.embedded { width: auto; }
+.row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+label.check { font-weight: 400; gap: 6px; justify-content: flex-start; align-items: center; cursor: pointer; }
+label.check input { accent-color: var(--accent); margin: 0; }
+.small { padding: 3px 8px; border: 1px solid #3a3a3a; border-radius: 6px; background: transparent;
+  color: var(--muted); font-size: 11px; cursor: pointer; }
+.hint { color: var(--muted); font-size: 11px; margin: 6px 0 0; }

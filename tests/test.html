@@ -10,7 +10,7 @@
 <audio id="a" src="tone.wav" preload="auto"></audio>
 <script src="../page-rate.js"></script>
 <script type="module">
-import { buildChain, semitonesFor } from '../audio-chain.js';
+import { buildChain, semitonesFor, shiftFor } from '../audio-chain.js';
 const log = (...a) => { document.getElementById('log').textContent += a.join(' ') + '\n'; };
 window.results = {};
 
@@ -44,6 +44,15 @@ document.getElementById('run').onclick = async () => {
   const p2 = peakHz(an, ctx);
   log(`after speed 1.5 -> peak ${p2.hz.toFixed(1)} Hz, expected ${(440 / 1.5).toFixed(1)} Hz`);
   window.results.audio = { p1: p.hz, e1: expect, p2: p2.hz, e2: 440 / 1.5, latency: chain.latency };
+  // Slowed down, user pitch shift, tape mode. The oscillator stands in for audio already
+  // resampled by the page, so the expected output is 440 * 2^(shift/12).
+  for (const s of [{ speed: 0.8, pitch: 0 }, { speed: 0.8, pitch: 2 }, { speed: 1, pitch: -3 }, { speed: 0.8, pitch: 0, tape: true }]) {
+    chain.apply({ bass: 0, reverb: 0, ...s });
+    await new Promise((r) => setTimeout(r, 1500));
+    const q = peakHz(an, ctx);
+    const exp = 440 * Math.pow(2, shiftFor(s) / 12);
+    log(`${JSON.stringify(s)} -> peak ${q.hz.toFixed(1)} Hz, expected ${exp.toFixed(1)} Hz`);
+  }
   osc.stop(); chain.disconnect(); ctx.close();
 };
 

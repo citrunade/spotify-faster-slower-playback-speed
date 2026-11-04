@@ -6,6 +6,8 @@ import SignalsmithStretch from './lib/SignalsmithStretch.mjs';
 SignalsmithStretch.moduleUrl = new URL('./lib/SignalsmithStretch.mjs', import.meta.url).href;
 
 export const semitonesFor = (speed) => -12 * Math.log2(speed);
+// Total shift: undo the speed's pitch change (unless tape mode), then the user's own shift.
+export const shiftFor = (s) => (s.tape ? 0 : semitonesFor(s.speed)) + (Number(s.pitch) || 0);
 
 function makeImpulse(ctx, seconds = 2.4, decay = 3.2) {
   const rate = ctx.sampleRate;
@@ -47,7 +49,7 @@ export async function buildChain(ctx, input, settings) {
   const apply = (s, smooth = true) => {
     const t = ctx.currentTime;
     const set = (p, v) => (smooth ? p.setTargetAtTime(v, t, 0.05) : (p.value = v));
-    stretch.schedule({ semitones: semitonesFor(s.speed) });
+    stretch.schedule({ semitones: shiftFor(s) });
     set(bass.gain, s.bass);
     const r = Math.max(0, Math.min(1, s.reverb));
     set(wet.gain, r * 0.5);

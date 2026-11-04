@@ -61,12 +61,19 @@ function togglePanel() {
     const f = document.createElement('iframe');
     f.src = chrome.runtime.getURL(`popup.html?tab=${ui.tabId}`);
     Object.assign(f.style, {
-      position: 'fixed', zIndex: '2147483647', width: '280px', height: '330px', border: '0',
+      position: 'fixed', zIndex: '2147483647', width: '280px', height: '460px', border: '0',
       borderRadius: '10px', boxShadow: '0 6px 24px rgba(0,0,0,.6)', background: '#121212', display: 'none',
     });
     document.documentElement.appendChild(f);
     ui.frame = f;
     document.addEventListener('click', () => { f.style.display = 'none'; });
+    const origin = new URL(chrome.runtime.getURL('')).origin;
+    window.addEventListener('message', (e) => {
+      if (e.origin !== origin || !e.data?.spotifyStretchHeight) return;
+      // Fit above the player bar; the panel scrolls inside if the window is short.
+      const room = (ui.btn?.getBoundingClientRect().top ?? innerHeight) - 18;
+      f.style.height = `${Math.min(e.data.spotifyStretchHeight, room)}px`;
+    });
   }
   const f = ui.frame;
   if (f.style.display === 'block') { f.style.display = 'none'; return; }

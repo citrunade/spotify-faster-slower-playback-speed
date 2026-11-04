@@ -15,8 +15,9 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 
 1. Open https://open.spotify.com and play something.
 2. Click the extension icon, press **Off** so it turns **On**.
-3. Pick a speed (slider or 1.1 / 1.2 / 1.25 / 1.3 / 1.5), bass and reverb. Changes apply live and are remembered.
-4. Press **On** again to go back to normal Spotify.
+3. Pick a speed: 0.5–2× (presets 0.75–0.9 slowed, 1.1–1.5 sped up), plus bass and reverb. Changes apply live and are remembered.
+4. **Pitch**: shift up or down by up to 12 semitones (pitch stays original otherwise). **Tape mode** lets the pitch follow the speed instead: slowed sounds deeper, sped up sounds higher (classic "slowed + reverb" / nightcore). The pitch knob adds on top.
+5. Press **On** again to go back to normal Spotify.
 
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 
