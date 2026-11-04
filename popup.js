@@ -18,16 +18,17 @@ function showStatus(text, error = false) {
   status.classList.toggle('error', error);
 }
 
-// Pitch slider shows the shift actually applied: the automatic correction for the speed
-// (none in tape mode) plus the user's own offset, which is what gets stored.
-const autoShift = (s) => (s.tape ? 0 : -12 * Math.log2(s.speed));
+// Pitch slider shows how the song sounds compared with the original: 0 = original pitch.
+// In tape mode the speed itself moves the pitch, so the slider moves with speed.
+// Only the user's own offset on top of that is stored.
+const autoShift = (s) => (s.tape ? 12 * Math.log2(s.speed) : 0);
 const shownPitch = (s) => autoShift(s) + Number(s.pitch || 0);
 
 function render(settings) {
   $('tape').checked = !!settings.tape;
   $('pitchHint').textContent = settings.tape
-    ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher).'
-    : `Pitch is moved ${autoShift(settings) <= 0 ? 'down' : 'up'} automatically to cancel the speed change, so it sounds original. Drag to adjust; Reset goes back to automatic.`;
+    ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher). Drag to shift on top; Reset follows speed again.'
+    : 'Pitch stays original at any speed (0 st). Drag to shift it.';
   for (const k of Object.keys(SLIDERS)) {
     const v = k === 'pitch' ? shownPitch(settings) : settings[k];
     $(k).value = v;
