@@ -94,15 +94,22 @@
     frozen.cover.remove();
   }
 
+  // Looser comparison: letters and digits only ("Song (feat. X) - Lofi" ≈ "Song - Lofi").
+  const loose = (s) => norm(s).replace(/\((feat|with)[^)]*\)/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+
   function findRow(want) {
     const rows = [...document.querySelectorAll('[data-testid="tracklist-row"]')];
     const titleOf = (r) => norm(r.querySelector('[data-testid="internal-track-link"]')?.textContent);
+    const lw = loose(want);
     return {
-      any: rows.length > 0,
+      titles: rows.map(titleOf).slice(0, 30),
       row: rows.find((r) => titleOf(r) === want)
-        || rows.find((r) => { const t = titleOf(r); return t && (want.startsWith(t) || t.startsWith(want)); }),
+        || rows.find((r) => { const t = loose(titleOf(r)); return t && lw && (t === lw || lw.startsWith(t) || t.startsWith(lw)); }),
     };
   }
+
+  // Last attempt's details, kept so a failure can be diagnosed.
+  const note = (d) => chrome.storage.local.set({ lastPlayAttempt: { at: Date.now(), ...d } }).catch(() => {});
 
   const pressPlay = (row) =>
     [...row.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''))?.click();
@@ -117,18 +124,25 @@
     // Already on that album: just press play, nothing to hide.
     if (onAlbum) { const { row } = findRow(want); if (row) { pressPlay(row); return; } }
 
+    const from = location.pathname;
     const frozen = onAlbum ? null : freezeMain();
     navigate(entry.albumUrl);
-    let played = false;
-    for (let i = 0; i < 40; i++) { // wait up to ~8 s for the album's track list
+    // Wait up to ~10 s for the album's track list. Rows of the previous page can still be on
+    // screen while the album loads, so keep looking the whole time instead of giving up early.
+    let played = false, found = null, titles = [], hasButton = false;
+    for (let i = 0; i < 50 && !played; i++) {
       await sleep(200);
-      const { any, row } = findRow(want);
-      if (!any) continue;
-      if (!row) { if (i > 15) break; continue; }
-      pressPlay(row);
-      played = true;
-      break;
+      ({ row: found, titles } = findRow(want));
+      if (!found) continue;
+      const btn = [...found.querySelectorAll('button')].find((b) => /^Play /.test(b.getAttribute('aria-label') || ''));
+      hasButton = !!btn;
+      if (btn) { btn.click(); played = true; }
+      else if (i > 10) { // no play button found: double-clicking a row also plays it in Spotify
+        found.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
+        played = true;
+      }
     }
+    note({ want: entry.title, from, album: entry.albumUrl, found: !!found, hasButton, played, titles });
     // Played: go back to where the user was. Not found: stay on the album so they can pick it.
     if (played && !onAlbum) history.back();
     await unfreezeMain(frozen);
