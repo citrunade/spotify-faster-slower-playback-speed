@@ -58,7 +58,7 @@ document.getElementById('run').onclick = async () => {
 };
 
 // Drum loop: kick every 0.5 s, hat every 0.25 s. "Fill" = average level between hits relative
-// to the loudest moment; low bloom and drum tail should raise it.
+// to the loudest moment; drum tail should raise it.
 document.getElementById('drums').onclick = async () => {
   const ctx = new AudioContext({ latencyHint: 'playback' });
   await ctx.resume();
@@ -77,7 +77,7 @@ document.getElementById('drums').onclick = async () => {
     }
   }
   const src = ctx.createBufferSource(); src.buffer = loop; src.loop = true;
-  const chain = await buildChain(ctx, src, { speed: 1, pitch: 0, bass: 0, reverb: 0, bloom: 0, tail: 0 });
+  const chain = await buildChain(ctx, src, { speed: 1, pitch: 0, bass: 0, reverb: 0, tail: 0 });
   const an = ctx.createAnalyser(); an.fftSize = 512; chain.output.connect(an);
   src.start();
   // Share of time the output stays within 20 dB / 40 dB of its peak: longer tails = higher.
@@ -90,8 +90,8 @@ document.getElementById('drums').onclick = async () => {
   };
   await new Promise((r) => setTimeout(r, 800));
   const res = {};
-  for (const [name, s] of [['off', {}], ['bloom 100%', { bloom: 1 }], ['tail 100%', { tail: 1 }], ['both 100%', { bloom: 1, tail: 1 }], ['off again', {}]]) {
-    chain.apply({ speed: 1, pitch: 0, bass: 0, reverb: 0, bloom: 0, tail: 0, ...s });
+  for (const [name, s] of [['off', {}], ['tail 100%', { tail: 1 }], ['off again', {}]]) {
+    chain.apply({ speed: 1, pitch: 0, bass: 0, reverb: 0, tail: 0, ...s });
     await new Promise((r) => setTimeout(r, 1200));
     res[name] = await fill();
     log(`${name}: ${res[name].fill} (peak ${res[name].peak})`);

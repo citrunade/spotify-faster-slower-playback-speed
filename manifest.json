@@ -1,29 +1,71 @@
 {
   "manifest_version": 3,
-  "name": "Spotify Stretch",
-  "version": "1.3.0",
-  "description": "Plays the Spotify web player faster at the original pitch (sped-up edit sound), with bass and reverb.",
-  "permissions": ["tabCapture", "offscreen", "storage"],
-  "host_permissions": ["https://open.spotify.com/*"],
-  "background": { "service_worker": "service-worker.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Spotify Stretch" },
+  "name": "Spotify Faster / Slower Control",
+  "short_name": "Faster / Slower",
+  "version": "1.4.0",
+  "description": "Speed up or slow down the Spotify web player at the original pitch, with smooth, non-choppy sound. Not affiliated with Spotify.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://open.spotify.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Spotify Faster / Slower Control",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
   "content_scripts": [
     {
-      "matches": ["https://open.spotify.com/*"],
-      "js": ["page-rate.js"],
+      "matches": [
+        "https://open.spotify.com/*"
+      ],
+      "js": [
+        "page-rate.js"
+      ],
       "world": "MAIN",
       "run_at": "document_start",
       "all_frames": true
     },
     {
-      "matches": ["https://open.spotify.com/*"],
-      "js": ["content.js", "history-render.js", "history.js"],
+      "matches": [
+        "https://open.spotify.com/*"
+      ],
+      "js": [
+        "content.js",
+        "history-render.js",
+        "history.js"
+      ],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["popup.html", "popup.js", "popup.css"], "matches": ["https://open.spotify.com/*"] }
+    {
+      "resources": [
+        "popup.html",
+        "popup.js",
+        "popup.css"
+      ],
+      "matches": [
+        "https://open.spotify.com/*"
+      ]
+    }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"

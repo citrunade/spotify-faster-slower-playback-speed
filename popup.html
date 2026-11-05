@@ -6,7 +6,7 @@
 </head>
 <body>
   <header>
-    <h1>Spotify Stretch</h1>
+    <h1>Faster / Slower</h1>
     <button id="power" class="power" aria-pressed="false">Off</button>
   </header>
   <p id="status" class="status"></p>
@@ -47,11 +47,9 @@
   </section>
 
   <section>
-    <label for="bloom">Low bloom <output id="bloomOut"></output></label>
-    <input id="bloom" type="range" min="0" max="1" step="0.01">
-    <label for="tail" class="second">Drum tail <output id="tailOut"></output></label>
+    <label for="tail">Drum tail <output id="tailOut"></output></label>
     <input id="tail" type="range" min="0" max="1" step="0.01">
-    <p class="hint">Bloom: bass and kick ring longer and blend. Tail: drum hits fade out slower.</p>
+    <p class="hint">Drum hits fade out slower.</p>
   </section>
 
   <section>

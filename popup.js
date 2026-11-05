@@ -1,4 +1,4 @@
-const SLIDERS = { speed: 1.25, pitch: 0, bass: 4, bloom: 0, tail: 0, reverb: 0 };
+const SLIDERS = { speed: 1.25, pitch: 0, bass: 4, tail: 0, reverb: 0 };
 const DEFAULTS = { ...SLIDERS, tape: false };
 const $ = (id) => document.getElementById(id);
 const power = $('power'), status = $('status');
@@ -11,7 +11,6 @@ const fmt = {
   pitch: (v) => { const r = Math.round(v * 10) / 10; return r === 0 ? '0 st' : `${r > 0 ? '+' : ''}${r.toFixed(1)} st`; },
   bass: (v) => `+${Number(v).toFixed(1)} dB`,
   reverb: (v) => `${Math.round(v * 100)}%`,
-  bloom: (v) => `${Math.round(v * 100)}%`,
   tail: (v) => `${Math.round(v * 100)}%`,
 };
 
@@ -21,15 +20,17 @@ function showStatus(text, error = false) {
 }
 
 // Pitch slider shows how the song sounds compared with the original: 0 = original pitch.
-// In tape mode the speed itself moves the pitch, so the slider moves with speed.
-// Only the user's own offset on top of that is stored.
+// In tape mode the speed itself moves the pitch: the (greyed-out) slider just shows it.
 const autoShift = (s) => (s.tape ? 12 * Math.log2(s.speed) : 0);
-const shownPitch = (s) => autoShift(s) + Number(s.pitch || 0);
+const shownPitch = (s) => (s.tape ? autoShift(s) : Number(s.pitch || 0));
 
 function render(settings) {
   $('tape').checked = !!settings.tape;
+  // Tape mode decides the pitch from the speed, so the pitch controls are greyed out.
+  $('pitch').disabled = $('pitchReset').disabled = !!settings.tape;
+  $('pitch').closest('section').classList.toggle('locked', !!settings.tape);
   $('pitchHint').textContent = settings.tape
-    ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher). Drag to shift on top; Reset follows speed again.'
+    ? 'Tape mode: pitch moves with speed (slowed = deeper, sped up = higher). Turn it off to set the pitch yourself.'
     : 'Pitch stays original at any speed (0 st). Drag to shift it.';
   for (const k of Object.keys(SLIDERS)) {
     const v = k === 'pitch' ? shownPitch(settings) : settings[k];
@@ -56,8 +57,7 @@ async function save(patch) {
 for (const k of Object.keys(SLIDERS)) {
   $(k).addEventListener('input', (e) => {
     const v = Number(e.target.value);
-    // Slider value is the total shift; store only the part on top of the automatic one.
-    save({ [k]: k === 'pitch' ? Math.round((v - autoShift(current)) * 100) / 100 : v });
+    save({ [k]: k === 'pitch' ? Math.round(v * 100) / 100 : v });
   });
 }
 $('tape').addEventListener('change', (e) => save({ tape: e.target.checked }));
@@ -95,7 +95,7 @@ power.addEventListener('click', async () => {
     setOn(false);
     let text = String(e.message || e);
     // Normal Chrome window: capture needs a click on the toolbar icon first.
-    if (embeddedTab && /invoked|activeTab/i.test(text)) text = 'In a normal Chrome window, click the Spotify Stretch icon in the toolbar to turn it on.';
+    if (embeddedTab && /invoked|activeTab/i.test(text)) text = 'In a normal Chrome window, click the Faster / Slower icon in the toolbar to turn it on.';
     showStatus(text, true);
   } finally {
     power.disabled = !isSpotify(tab);

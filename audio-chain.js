@@ -1,5 +1,5 @@
 // Audio graph shared by the offscreen document and the test page:
-// input -> Signalsmith Stretch (pitch) -> low shelf (bass) -> dry + reverb + low bloom + drum tail
+// input -> Signalsmith Stretch (pitch) -> low shelf (bass) -> dry + reverb + drum tail
 // -> safety limiter -> output.
 import SignalsmithStretch from './lib/SignalsmithStretch.mjs';
 
@@ -7,8 +7,9 @@ import SignalsmithStretch from './lib/SignalsmithStretch.mjs';
 SignalsmithStretch.moduleUrl = new URL('./lib/SignalsmithStretch.mjs', import.meta.url).href;
 
 export const semitonesFor = (speed) => -12 * Math.log2(speed);
-// Total shift: undo the speed's pitch change (unless tape mode), then the user's own shift.
-export const shiftFor = (s) => (s.tape ? 0 : semitonesFor(s.speed)) + (Number(s.pitch) || 0);
+// Total shift. Tape mode: none, pitch follows speed like a record. Otherwise undo the speed's
+// pitch change, then add the user's own shift.
+export const shiftFor = (s) => (s.tape ? 0 : semitonesFor(s.speed) + (Number(s.pitch) || 0));
 
 function makeImpulse(ctx, seconds = 2.4, decay = 3.2) {
   const rate = ctx.sampleRate;
@@ -21,25 +22,6 @@ function makeImpulse(ctx, seconds = 2.4, decay = 3.2) {
       const t = (i - pre) / (len - pre);
       d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay);
     }
-  }
-  return buf;
-}
-
-// Short, dark tail used for "low bloom": low-passed noise fading over ~1.2 s.
-function makeBloomImpulse(ctx, seconds = 1.2) {
-  const rate = ctx.sampleRate;
-  const len = Math.floor(rate * seconds);
-  const buf = ctx.createBuffer(2, len, rate);
-  const a = Math.exp(-2 * Math.PI * 180 / rate); // one-pole low-pass at ~180 Hz
-  for (let c = 0; c < 2; c++) {
-    const d = buf.getChannelData(c);
-    let y = 0, peak = 0;
-    for (let i = 0; i < len; i++) {
-      y = a * y + (1 - a) * (Math.random() * 2 - 1);
-      d[i] = y * Math.pow(1 - i / len, 2.5);
-      peak = Math.max(peak, Math.abs(d[i]));
-    }
-    for (let i = 0; i < len; i++) d[i] /= peak * 40;
   }
   return buf;
 }
@@ -95,15 +77,6 @@ export async function buildChain(ctx, input, settings) {
   bass.connect(dry).connect(limiter);
   bass.connect(verb).connect(wet).connect(limiter);
 
-  // Low bloom: only the low end (bass, kick) gets a ~1 s dark tail, so it rings into the next hit.
-  const bloomSplit = ctx.createBiquadFilter();
-  bloomSplit.type = 'lowpass'; bloomSplit.frequency.value = 160; bloomSplit.Q.value = 0.7;
-  const bloomVerb = ctx.createConvolver();
-  bloomVerb.normalize = false;
-  bloomVerb.buffer = makeBloomImpulse(ctx);
-  const bloom = ctx.createGain();
-  bass.connect(bloomSplit).connect(bloomVerb).connect(bloom).connect(limiter);
-
   // Drum tail: drum ranges only (snare body ~220 Hz, crack/hats above 5 kHz, kick below 120 Hz).
   // The worklet passes only the hit fronts; a short decaying tail is added to each of them.
   await ctx.audioWorklet.addModule(new URL('./drum-tail-worklet.js', import.meta.url).href);
@@ -129,7 +102,6 @@ export async function buildChain(ctx, input, settings) {
     const r = Math.max(0, Math.min(1, s.reverb));
     set(wet.gain, r * 0.5);
     set(dry.gain, 1 - r * 0.25);
-    set(bloom.gain, Math.max(0, Math.min(1, Number(s.bloom) || 0)) * 0.9);
     set(tail.parameters.get('amount'), Math.max(0, Math.min(1, Number(s.tail) || 0)));
   };
   apply(settings, false);

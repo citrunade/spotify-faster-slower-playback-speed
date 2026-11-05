@@ -18,7 +18,7 @@ const ui = {
     this.label.textContent = `${Number(this.speed).toFixed(2).replace(/0$/, '')}×`;
     this.btn.style.color = this.on ? '#1ed760' : '';
     this.btn.setAttribute('aria-pressed', String(this.on));
-    this.btn.title = this.on ? 'Spotify Stretch: on' : 'Spotify Stretch: off';
+    this.btn.title = this.on ? 'Faster / Slower: on' : 'Faster / Slower: off';
   },
 };
 
@@ -53,7 +53,7 @@ function makeButton(template) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.id = 'spotify-stretch-button';
-  btn.setAttribute('aria-label', 'Spotify Stretch');
+  btn.setAttribute('aria-label', 'Faster / Slower speed settings');
   // Borrow Spotify's own button classes so it looks like its neighbours.
   btn.className = template?.className || '';
   Object.assign(btn.style, { minWidth: '36px', width: 'auto', padding: '0 4px', fontWeight: '700', fontSize: '11px' });

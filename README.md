@@ -1,6 +1,8 @@
-# Spotify Stretch
+# Spotify Faster / Slower Control
 
-Chrome extension that plays the Spotify web player faster **at the original pitch** — the "sped-up edit" feel without the chipmunk voice and without the choppy sound of Chrome's own pitch keeping. Adds a bass boost and optional reverb.
+(Formerly "Spotify Stretch". Not affiliated with or endorsed by Spotify.)
+
+Chrome extension that plays the Spotify web player faster or slower **at the original pitch** — the "sped-up edit" feel without the chipmunk voice and without the choppy sound of Chrome's own pitch keeping. Adds a bass boost and optional reverb.
 
 How it works: the song is sped up with plain resampling (smooth, pitch goes up), the tab's sound is captured, and a music-grade pitch shifter (Signalsmith Stretch) brings the pitch back down by exactly the amount the speed raised it. Expect about 0.15 s of delay.
 
@@ -16,13 +18,13 @@ How it works: the song is sped up with plain resampling (smooth, pitch goes up),
 1. Open https://open.spotify.com and play something.
 2. Click the extension icon, press **Off** so it turns **On**.
 3. Pick a speed: 0.5–2× (presets 0.75–0.9 slowed, 1.1–1.5 sped up), plus bass and reverb. Changes apply live and are remembered.
-4. **Pitch**: the slider shows how the song sounds compared with the original (0 st = original). With tape mode off it stays at 0 at any speed; drag to shift higher or lower. **Tape mode** lets pitch follow speed (slowed sounds deeper, sped up sounds higher, the classic "slowed + reverb" / nightcore), and the slider moves with the speed (e.g. +3.9 st at 1.25×). **Reset pitch** removes your own shift.
-5. **Low bloom** makes the bass and kick ring longer and blend into each other; **Drum tail** makes drum hits fade out slower (drum frequency ranges only). Both start at 0. A limiter at the end keeps stacked effects from distorting.
+4. **Pitch**: the slider shows how the song sounds compared with the original (0 st = original). With tape mode off it stays at 0 at any speed; drag to shift higher or lower. **Reset pitch** removes your own shift. **Tape mode** lets pitch follow speed (slowed sounds deeper, sped up sounds higher, the classic "slowed + reverb" / nightcore); the pitch slider is then greyed out and just shows the result (e.g. +3.9 st at 1.25×).
+5. **Drum tail** makes drum hits fade out slower (drum frequency ranges only). Starts at 0. A limiter at the end keeps stacked effects from distorting.
 6. Press **On** again to go back to normal Spotify.
 
 ### Recently played
 
-The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel. Click a song to play it; you stay on the page you were on. Right-click it (or hover and click **⋯**) for the desktop-style menu: Add to queue, Add to Liked Songs, Go to song radio, Go to album, Go to artist, Remove from history. These work through Spotify's own song menu on the song's album page, opened out of sight, so they rely on Spotify's English menu labels. Only songs played in the web player after installing are recorded.
+The web player has no track history, so the extension keeps one: every song that plays for a few seconds is added (last 200). Open it from the **Recently played** tab added next to **Queue** in Spotify's queue panel. Double-click a song, or hover and click the play button on its cover, to play it; you stay on the page you were on. Right-click it (or hover and click **⋯**) for the desktop-style menu: Add to queue, Add to Liked Songs, Go to song radio, Go to album, Go to artist, Remove from history. These work through Spotify's own song menu on the song's album page, opened out of sight, so they rely on Spotify's English menu labels. Only songs played in the web player after installing are recorded.
 
 While it is on, Chrome shows a "sharing this tab's audio" indicator — that is the capture. It needs to be switched on again after closing the tab or restarting Chrome.
 
@@ -54,4 +56,7 @@ The extension ID is tied to the folder path: if you move the folder, re-run the 
 | `popup.*` | Controls (toolbar popup, or panel inside the app window) |
 | `setup-app-window.ps1` | Creates the app-window shortcuts |
 | `lib/SignalsmithStretch.mjs` | Signalsmith Stretch 1.3.2 (MIT, © Geraint Luff / Signalsmith Audio), from npm `signalsmith-stretch` |
+| `icons/` | Extension icons |
+| `store/` | Chrome Web Store listing text and privacy policy |
+| `build-store.ps1` | Builds the zip to upload to the Chrome Web Store (`dist/`) |
 | `tests/test.html` | Self-test: serve the folder with `python -m http.server` and open `/tests/test.html` |
