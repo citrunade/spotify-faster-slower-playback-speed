@@ -39,7 +39,8 @@
   Object.defineProperty(proto, 'playbackRate', {
     configurable: true,
     enumerable: rateDesc.enumerable,
-    get() { return forced !== 1 ? (pageRate.get(this) ?? 1) : nativeRate(this); },
+    // Report the real rate: Spotify moves its progress bar by it, so hiding it froze the bar.
+    get() { return nativeRate(this); },
     set(v) { pageRate.set(this, v); track(this); },
   });
 
