@@ -2,11 +2,21 @@
 
 (Formerly "Spotify Stretch". Not affiliated with or endorsed by Spotify.)
 
+![Faster / Slower for the Spotify web player](store/promo-marquee.png)
+
 Chrome extension that plays the Spotify web player faster or slower **at the original pitch** — the "sped-up edit" feel without the chipmunk voice and without the choppy sound of Chrome's own pitch keeping. Adds a bass boost and optional reverb.
 
 How it works: the song is sped up with plain resampling (smooth, pitch goes up), the tab's sound is captured, and a music-grade pitch shifter (Signalsmith Stretch) brings the pitch back down by exactly the amount the speed raised it. Expect about 0.15 s of delay.
 
 A YouTube version with the same sound engine, plus a picture delay that keeps lips in sync, lives in its own repository: [youtube-faster-slower](https://github.com/citrunade/youtube-faster-slower).
+
+## Screenshots
+
+| Faster or slower, same pitch | Recently played |
+|---|---|
+| ![Settings panel with a song's own speed and sound](store/screenshot-1.png) | ![Recently played list with song menu](store/screenshot-2.png) |
+
+Small promo tile: ![Small promo tile](store/promo-small.png)
 
 ## Install
 
