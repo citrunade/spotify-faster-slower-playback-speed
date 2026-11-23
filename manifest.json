@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Spotify Faster / Slower Control",
+  "name": "Spotify Faster / Slower Control + Recently Played",
   "short_name": "Faster / Slower",
-  "version": "1.4.0",
-  "description": "Speed up or slow down the Spotify web player at the original pitch, with smooth, non-choppy sound. Not affiliated with Spotify.",
+  "version": "1.9.2",
+  "description": "Speed up or slow down the Spotify web player at the original pitch, plus a Recently played list. Not affiliated with Spotify.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/16.png",
@@ -14,7 +14,8 @@
   "permissions": [
     "tabCapture",
     "offscreen",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://open.spotify.com/*"
@@ -23,11 +24,18 @@
     "service_worker": "service-worker.js"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Spotify Faster / Slower Control",
+    "default_title": "Spotify Faster / Slower: click to turn on or off",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png"
+    }
+  },
+  "commands": {
+    "toggle": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Turn Faster / Slower on or off in this tab"
     }
   },
   "content_scripts": [

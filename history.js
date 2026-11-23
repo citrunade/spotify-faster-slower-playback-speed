@@ -6,6 +6,7 @@
 
   const MAX = 200;
   const MIN_PLAY_POLLS = 2; // ~4 s of play before a song counts (skipping through doesn't)
+  const LINK_WAIT_POLLS = 8; // after a reload the player bar's links can take a while: wait ~16 s
 
   // ---- Recording -------------------------------------------------------------------
   function nowPlaying() {
@@ -25,7 +26,7 @@
     };
   }
 
-  let candidate = null, polls = 0, recordedKey = null;
+  let candidate = null, polls = 0, recordedKey = null, recordedLinks = false;
   setInterval(async () => {
     const playing = navigator.mediaSession?.playbackState === 'playing'
       || document.querySelector('[data-testid="control-button-playpause"]')?.getAttribute('aria-label') === 'Pause';
@@ -34,11 +35,18 @@
     if (!t) return;
     const key = ssHistoryKey(t);
     if (key !== candidate) { candidate = key; polls = 1; return; }
-    if (++polls < MIN_PLAY_POLLS || key === recordedKey) return;
+    if (++polls < MIN_PLAY_POLLS) return;
+    const hasLinks = !!(t.albumUrl && t.artistUrl);
+    if (!hasLinks && polls < LINK_WAIT_POLLS) return;
+    // Already saved: only come back to it if its missing links have turned up.
+    if (key === recordedKey && (recordedLinks || !hasLinks)) return;
     recordedKey = key;
+    recordedLinks = hasLinks;
     const { history = [] } = await chrome.storage.local.get('history');
-    if (history[0] && ssHistoryKey(history[0]) === key) history[0] = { ...history[0], ...t, playedAt: Date.now() };
-    else history.unshift({ ...t, playedAt: Date.now() });
+    if (history[0] && ssHistoryKey(history[0]) === key) {
+      // The same song again: blank links never replace ones already saved.
+      history[0] = { ...history[0], ...t, albumUrl: t.albumUrl || history[0].albumUrl, artistUrl: t.artistUrl || history[0].artistUrl, playedAt: Date.now() };
+    } else history.unshift({ ...t, playedAt: Date.now() });
     await chrome.storage.local.set({ history: history.slice(0, MAX) });
   }, 2000);
 
@@ -159,7 +167,7 @@
     more.click();
     for (let i = 0; i < 15; i++) {
       await sleep(100);
-      const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')];
+      const items = [...document.querySelectorAll('[role="menu"] li > button, [role="menu"] li > a')];
       if (!items.length) continue;
       const item = items.find((m) => re.test(m.textContent.trim()));
       if (item) { item.click(); return 'ok'; }
@@ -169,8 +177,67 @@
     return 'no-menu';
   }
 
+  // "Add to playlist" in Spotify's song menu opens a second menu: a search box, "New playlist"
+  // and the user's playlists. Opens it and returns its buttons (null if it never showed).
+  const isAddToPlaylist = (b) => /^Add to playlist$/i.test(b.textContent.trim());
+  async function playlistButtons(row) {
+    const more = row.querySelector('[data-testid="more-button"]') || rowButton(row, /^More options/);
+    if (!more) return null;
+    more.click();
+    let opener = null;
+    for (let i = 0; i < 15 && !opener; i++) {
+      await sleep(100);
+      opener = [...document.querySelectorAll('[role="menu"] li > button')].find(isAddToPlaylist);
+    }
+    if (!opener) { closeMenus(); return null; }
+    // The second menu opens on hover in Spotify; a click as well, for good measure.
+    for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter']) {
+      opener.dispatchEvent(new MouseEvent(type, { bubbles: type.endsWith('over'), view: window }));
+    }
+    if (opener.getAttribute('aria-expanded') !== 'true') opener.click();
+    // Wait for the second menu, and for its list to stop growing (it can load in a moment later).
+    let prev = -1, steady = 0;
+    for (let i = 0; i < 40; i++) {
+      await sleep(100);
+      const sub = [...document.querySelectorAll('[role="menu"]')]
+        .find((m) => ![...m.querySelectorAll('li > button')].some(isAddToPlaylist) && m.querySelector('li > button'));
+      const buttons = sub ? [...sub.querySelectorAll('li > button')] : [];
+      if (buttons.length && buttons.length === prev) { if (++steady >= 3) return buttons; } else steady = 0;
+      prev = buttons.length;
+    }
+    closeMenus();
+    return null;
+  }
+  const buttonName = (b) => b.textContent.trim();
+  function closeMenus() {
+    for (let i = 0; i < 3 && document.querySelector('[role="menu"]'); i++) {
+      (document.activeElement || document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    }
+  }
+  let playlistNames = null;
+
   // What each action does once the song's row is found. Returns a short result string.
   const ACTIONS = {
+    playlists: async (row) => {
+      const buttons = await playlistButtons(row);
+      if (!buttons) return 'no-item';
+      playlistNames = buttons.map(buttonName).filter(Boolean);
+      closeMenus();
+      return 'ok';
+    },
+    playlist: async (row, name) => {
+      const buttons = await playlistButtons(row);
+      const pick = buttons?.find((b) => buttonName(b) === name);
+      if (!pick) { closeMenus(); return 'no-item'; }
+      pick.click();
+      // Already in that playlist: Spotify asks whether to add it again. Wait for the answer
+      // before going back (and don't claim it was added).
+      const asking = () => document.querySelector('dialog[open], [role="alertdialog"], [aria-modal="true"]');
+      for (let i = 0; i < 8 && !asking(); i++) await sleep(100);
+      if (!asking()) return 'ok';
+      for (let i = 0; i < 300 && asking(); i++) await sleep(200); // at most a minute
+      return 'asked';
+    },
     play: async (row) => {
       const btn = rowButton(row, /^Play\b/);
       if (btn) btn.click();
@@ -183,9 +250,44 @@
       return menuItem(row, /^(Add|Save) to (your )?Liked Songs$/i);
     },
     radio: (row) => menuItem(row, /^Go to song radio$/i),
+    exclude: (row) => menuItem(row, /^Exclude from your taste profile$/i),
+    jam: (row) => menuItem(row, /^Start a Jam$/i),
+    credits: async (row) => {
+      const result = await menuItem(row, /^View credits$/i);
+      if (result !== 'ok') return result;
+      // The credits window shows over the frozen view: go back once it is closed.
+      for (let i = 0; i < 30 && !document.querySelector('dialog[open]'); i++) await sleep(100);
+      while (document.querySelector('dialog[open]')) await sleep(200);
+      return 'ok';
+    },
   };
-  const STAYS = { radio: true }; // these leave the user on the new page
-  const DONE = { queue: 'Added to queue', like: 'Added to Liked Songs' };
+  // Same idea for the artist's menu, from the ⋯ button on the artist's page. The exact wording
+  // matters: if Spotify offers the opposite (Unfollow), nothing is clicked.
+  const ARTIST_ACTIONS = {
+    follow: /^Follow$/i,
+    block: /^Don.t play this artist$/i,
+    artistRadio: /^Go to artist radio$/i,
+    report: /^Report$/i,
+  };
+  const STAYS = { radio: true, artistRadio: true }; // these leave the user on the new page
+  const DONE = {
+    queue: 'Added to queue', like: 'Added to Liked Songs', exclude: 'Excluded from your taste profile',
+    follow: 'Following', block: 'Won’t play this artist',
+  };
+  const NOT_OFFERED = { follow: 'Already following', block: 'Already not playing this artist', exclude: 'Already excluded' };
+
+  // Waits for the artist's page (not the page before it) and returns the bar with its ⋯ button.
+  async function openArtistBar(entry) {
+    for (let i = 0; i < 60; i++) { // up to ~12 s
+      await sleep(200);
+      if (location.pathname !== entry.artistUrl) continue;
+      const bar = document.querySelector('main [data-testid="artist-page"] [data-testid="action-bar-row"]');
+      if (!bar?.querySelector('[data-testid="more-button"]')) continue;
+      const name = document.querySelector('main [data-testid="entityTitle"]')?.textContent;
+      if (i > 15 || (name && loose(entry.artist).includes(loose(name)))) return bar;
+    }
+    return null;
+  }
 
   function toast(text) {
     const t = document.createElement('div');
@@ -201,36 +303,53 @@
   const note = (d) => chrome.storage.local.set({ lastPlayAttempt: { at: Date.now(), ...d } }).catch(() => {});
 
   let busy = false;
-  async function act(action, entry) {
-    if (action === 'album') { if (entry.albumUrl) navigate(entry.albumUrl); return; }
-    if (action === 'artist') { if (entry.artistUrl) navigate(entry.artistUrl); return; }
-    if (!ACTIONS[action]) return;
-    if (!entry.albumUrl) { navigate(`/search/${encodeURIComponent(`${entry.title} ${entry.artist}`)}`); return; }
-    if (busy) return;
+  // Returns the playlist names for 'playlists' (null if they couldn't be read).
+  async function act(action, entry, arg) {
+    // Songs saved without a link: a search for it instead of doing nothing.
+    const searchFor = (text, kind = '') => `/search/${encodeURIComponent(text)}${kind}`;
+    if (action === 'album') { navigate(entry.albumUrl || searchFor(`${entry.album} ${entry.artist}`, '/albums')); return; }
+    if (action === 'artist') { navigate(entry.artistUrl || searchFor(entry.artist, '/artists')); return; }
+    const artistAction = ARTIST_ACTIONS[action];
+    if (!ACTIONS[action] && !artistAction) return;
+    if (artistAction && !entry.artistUrl) { navigate(searchFor(entry.artist, '/artists')); return; }
+    if (action === 'playlists' && !entry.albumUrl) return null; // the picker says it couldn't load
+    if (!artistAction && !entry.albumUrl) { navigate(searchFor(`${entry.title} ${entry.artist}`)); return; }
+    if (busy) return null;
     busy = true;
+    playlistNames = null;
     const from = location.pathname;
-    const onAlbum = from === entry.albumUrl;
+    const page = artistAction ? entry.artistUrl : entry.albumUrl;
+    const onAlbum = from === page;
     const frozen = onAlbum ? null : freezeMain();
     let result = 'not-found';
     try {
-      navigate(entry.albumUrl);
-      const want = norm(entry.title);
-      const row = onAlbum ? (findRow(want).row || await scrollToFind(want)) : await openAlbumRow(entry);
-      if (row) result = await ACTIONS[action](row);
+      navigate(page);
+      if (artistAction) {
+        const bar = await openArtistBar(entry);
+        if (bar) result = await menuItem(bar, artistAction);
+      } else {
+        const want = norm(entry.title);
+        const row = onAlbum ? (findRow(want).row || await scrollToFind(want)) : await openAlbumRow(entry);
+        if (row) result = await ACTIONS[action](row, arg);
+      }
     } catch (e) { result = `error: ${e.message}`; }
-    note({ action, want: entry.title, from, album: entry.albumUrl, result, titles: findRow('').rows.map(titleOf).slice(0, 30) });
+    note({ action, want: entry.title, from, album: page, result, titles: findRow('').rows.map(titleOf).slice(0, 30) });
     if (STAYS[action] && result === 'ok') { await sleep(400); frozen?.cover.remove(); busy = false; return; }
     if (result === 'not-found') {
       frozen?.cover.remove(); // leave them on the album so they can pick the song themselves
-      toast('Couldn’t find that song on its album');
+      toast(artistAction ? 'Couldn’t open that artist' : 'Couldn’t find that song on its album');
     } else {
       if (!onAlbum) history.back();
       await unfreezeMain(frozen, !onAlbum);
-      if (result === 'ok' && DONE[action]) toast(DONE[action]);
+      if (result === 'ok' && action === 'playlist') toast(`Added to ${arg}`);
+      else if (result === 'ok' && DONE[action]) toast(DONE[action]);
       else if (result === 'already') toast('Already in Liked Songs');
-      else if (result !== 'ok') toast('That didn’t work, try again');
+      else if (result === 'no-item' && NOT_OFFERED[action]) toast(NOT_OFFERED[action]);
+      else if (result === 'no-item' && action === 'playlist') toast(`Couldn’t find the playlist “${arg}”`);
+      else if (result !== 'ok' && result !== 'asked' && action !== 'playlists') toast('That didn’t work, try again'); // the picker says so itself
     }
     busy = false;
+    return action === 'playlists' ? playlistNames : null;
   }
 
 

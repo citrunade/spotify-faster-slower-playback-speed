@@ -1,29 +1,77 @@
-// Isolated-world bridge: passes the speed from the extension to the page script,
-// and adds a speed button to Spotify's player bar (next to Queue / volume) that opens
-// the settings panel.
-const setRate = (rate) => {
-  document.dispatchEvent(new CustomEvent('spotifystretch:rate', { detail: rate }));
-  ui.on = rate !== 1;
+// Isolated-world bridge: passes the speed from the extension to the page script, and while
+// the extension is on adds a speed button to Spotify's player bar (next to Queue / volume)
+// that opens the settings panel. On/off itself is the toolbar icon or Alt+Shift+S.
+const setRate = (rate, on = rate !== 1, light = false) => {
+  document.dispatchEvent(new CustomEvent('spotifystretch:rate', { detail: light ? `${rate}|light` : String(rate) }));
+  ui.light = on && light;
+  ui.on = on;
+  if (on) ui.rate = rate;
+  ui.place?.();
   ui.render();
+  ui.hintOnce();
 };
 
 const ui = {
   on: false,
+  shortcut: 'Alt+Shift+S', // the on/off keys as set in Chrome ('' = none)
   speed: 1.25,
+  rate: null, // speed actually playing
   tabId: null,
   btn: null,
   frame: null,
   render() {
     if (!this.btn) return;
-    this.label.textContent = `${Number(this.speed).toFixed(2).replace(/0$/, '')}×`;
-    this.btn.style.color = this.on ? '#1ed760' : '';
-    this.btn.setAttribute('aria-pressed', String(this.on));
-    this.btn.title = this.on ? 'Faster / Slower: on' : 'Faster / Slower: off';
+    // App window, switched off: a dim "Off" that turns it on (there is no toolbar icon there).
+    if (!this.on) {
+      this.label.textContent = 'Off';
+      this.btn.style.color = '';
+      this.btn.style.opacity = '.6';
+      this.btn.title = 'Faster / Slower is off: click to turn on';
+      return;
+    }
+    this.btn.style.opacity = '';
+    const sp = `${Number(this.rate ?? this.speed).toFixed(2).replace(/0$/, '')}×`;
+    this.label.textContent = sp;
+    this.btn.style.color = '#1ed760';
+    this.btn.title = this.light ? `Faster / Slower: speed only in this tab. ${this.howTo()}` : 'Faster / Slower settings';
+    // Speed only in this tab: a small amber dot on the button.
+    if (!this.dot) {
+      this.dot = document.createElement('span');
+      this.dot.style.cssText = 'position:absolute;top:4px;right:2px;width:6px;height:6px;border-radius:50%;background:#ffb020;pointer-events:none;';
+    }
+    if (this.light) { this.btn.style.position = 'relative'; if (this.dot.parentElement !== this.btn) this.btn.appendChild(this.dot); }
+    else this.dot.remove();
+  },
+  // Speed only in this tab: what to do for the smooth sound.
+  howTo() {
+    const keys = this.shortcut ? `press ${this.shortcut}` : "click the Faster / Slower icon in Chrome's toolbar";
+    return `For smooth sound, ${keys} or right-click the page and choose "Faster / Slower: smooth sound in this tab".`;
+  },
+  // Once per tab (kept through refreshes): say that this tab has the speed only, and how to get
+  // the smooth sound. Chrome only lets the user start it, never the extension itself.
+  hinted: false,
+  hintOnce() {
+    if (this.hinted || !this.on || !this.light || window !== window.top) return;
+    this.hinted = true;
+    try { if (sessionStorage.getItem('ss-hinted')) return; sessionStorage.setItem('ss-hinted', '1'); } catch {}
+    this.toast(`Speed only in this tab, which can sound choppy. ${this.howTo()}`, 9000);
+  },
+  toast(text, ms = 4500) {
+    const t = this.toastEl || (this.toastEl = document.createElement('div'));
+    t.style.cssText = 'position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483647;max-width:70vw;'
+      + 'padding:10px 16px;border-radius:8px;background:#2a2a2a;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.5);'
+      + 'font:500 13px/1.4 system-ui,sans-serif;text-align:center;pointer-events:none;transition:opacity .25s;';
+    if (!t.isConnected) document.documentElement.appendChild(t);
+    t.textContent = text;
+    t.style.opacity = '1';
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => { t.style.opacity = '0'; }, ms);
   },
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
-  if (msg?.cmd === 'rate') setRate(msg.rate);
+  if (msg?.cmd === 'rate') setRate(msg.rate, msg.on, msg.light);
+  if (msg?.cmd === 'toast' && window === window.top) { ui.toast(msg.text); ui.render(); }
   if (msg?.cmd === 'ping') reply({ ok: true });
 });
 
@@ -40,8 +88,10 @@ chrome.storage.onChanged.addListener((c, area) => {
       const r = await chrome.runtime.sendMessage({ cmd: 'hello' });
       if (r?.tabId != null) {
         ui.tabId = r.tabId;
-        if (r.rate && r.rate !== 1) setRate(r.rate);
+        ui.appWindow = !!r.appWindow;
+        if (typeof r.shortcut === 'string') ui.shortcut = r.shortcut;
         if (window === window.top) watchPlayerBar();
+        if (r.on || (r.rate && r.rate !== 1)) setRate(r.rate, r.on ?? true, r.light);
         return;
       }
     } catch {}
@@ -56,19 +106,24 @@ function makeButton(template) {
   btn.setAttribute('aria-label', 'Faster / Slower speed settings');
   // Borrow Spotify's own button classes so it looks like its neighbours.
   btn.className = template?.className || '';
-  Object.assign(btn.style, { minWidth: '36px', width: 'auto', padding: '0 4px', fontWeight: '700', fontSize: '11px' });
+  Object.assign(btn.style, { minWidth: '36px', width: 'auto', padding: '0 4px', fontWeight: '700', fontSize: '11px', whiteSpace: 'nowrap' });
   const label = document.createElement('span');
   label.style.pointerEvents = 'none';
   btn.appendChild(label);
   ui.label = label;
-  btn.addEventListener('click', (e) => { e.stopPropagation(); togglePanel(); });
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (ui.on) { togglePanel(); return; }
+    ui.label.textContent = '…';
+    chrome.runtime.sendMessage({ cmd: 'toggle', tabId: ui.tabId }).catch(() => {});
+  });
   return btn;
 }
 
 function togglePanel() {
   if (!ui.frame) {
     const f = document.createElement('iframe');
-    f.src = chrome.runtime.getURL(`popup.html?tab=${ui.tabId}`);
+    f.src = chrome.runtime.getURL(`popup.html?tab=${ui.tabId}${ui.appWindow ? '&app=1' : ''}`);
     Object.assign(f.style, {
       position: 'fixed', zIndex: '2147483647', width: '280px', height: '460px', border: '0',
       borderRadius: '10px', boxShadow: '0 6px 24px rgba(0,0,0,.6)', background: '#121212', display: 'none',
@@ -94,7 +149,15 @@ function togglePanel() {
 
 function watchPlayerBar() {
   const place = () => {
-    if (ui.btn?.isConnected) return;
+    // Only while on: when off, nothing of ours is in Spotify's bar (except in the app window,
+    // which has no toolbar icon: there the button stays, to turn it back on).
+    if (!ui.on && !ui.appWindow) {
+      ui.btn?.remove();
+      if (ui.frame) ui.frame.style.display = 'none';
+      return;
+    }
+    if (!ui.on && ui.frame) ui.frame.style.display = 'none';
+    if (ui.btn?.isConnected) { ui.render(); return; }
     // Right-hand group of the player bar: [Queue] [Connect] [Volume] [Full screen]
     const volume = document.querySelector('[data-testid="now-playing-bar"] [data-testid="volume-bar"]');
     const group = volume?.parentElement;
@@ -105,6 +168,7 @@ function watchPlayerBar() {
     group.insertBefore(ui.btn, group.firstChild);
     ui.render();
   };
+  ui.place = place;
   let queued = false;
   new MutationObserver(() => {
     if (queued) return;
@@ -112,4 +176,18 @@ function watchPlayerBar() {
     requestAnimationFrame(() => { queued = false; place(); });
   }).observe(document.documentElement, { childList: true, subtree: true });
   place();
+}
+
+// Tell the background which song this tab is playing (same key as Recently played), so a song
+// with its own settings gets them the moment it starts.
+if (window === window.top) {
+  let lastKey = null;
+  setInterval(() => {
+    const m = navigator.mediaSession?.metadata;
+    if (!m?.title) return;
+    const key = `${m.title}|${m.artist || ''}|${m.album || ''}`;
+    if (key === lastKey) return;
+    chrome.runtime.sendMessage({ cmd: 'song', key, title: m.title, artist: m.artist || '' })
+      .then(() => { lastKey = key; }, () => {});
+  }, 300);
 }

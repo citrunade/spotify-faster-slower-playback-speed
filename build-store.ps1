@@ -31,7 +31,7 @@ try {
 
 # Every file the manifest or pages point at must be in the zip.
 $listed = $files | ForEach-Object { $_ -replace '\\', '/' }
-foreach ($f in Get-ChildItem $root -File -Include *.js, *.html, *.mjs -Recurse | Where-Object { $_.FullName -notmatch '\\(tests|dist|youtube|\.git)\\' }) {
+foreach ($f in Get-ChildItem $root -File -Include *.js, *.html, *.mjs -Recurse | Where-Object { $_.FullName -notmatch '\\(tests|dist|youtube|store|\.git|\.claude)\\' }) {
   $rel = $f.FullName.Substring($root.Length + 1) -replace '\\', '/'
   if ($rel -notin $listed) { Write-Warning "Not packaged: $rel (add it to the list if the extension uses it)" }
 }

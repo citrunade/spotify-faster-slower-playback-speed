@@ -58,6 +58,7 @@ export async function buildChain(ctx, input, settings) {
     return rms > 0 ? Math.round(20 * Math.log10(rms)) : -999;
   };
   let applied = null;
+  let scheduled = null; // last pitch shift sent to the shifter
 
   const bass = ctx.createBiquadFilter();
   bass.type = 'lowshelf';
@@ -75,7 +76,7 @@ export async function buildChain(ctx, input, settings) {
   const verb = ctx.createConvolver();
   verb.buffer = makeImpulse(ctx);
   bass.connect(dry).connect(limiter);
-  bass.connect(verb).connect(wet).connect(limiter);
+  verb.connect(wet).connect(limiter); // fed from bass only while reverb is up (see link)
 
   // Drum tail: drum ranges only (snare body ~220 Hz, crack/hats above 5 kHz, kick below 120 Hz).
   // The worklet passes only the hit fronts; a short decaying tail is added to each of them.
@@ -85,7 +86,8 @@ export async function buildChain(ctx, input, settings) {
   const kick = ctx.createBiquadFilter(); kick.type = 'lowpass'; kick.frequency.value = 120;
   const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 220; body.Q.value = 0.8;
   const crack = ctx.createBiquadFilter(); crack.type = 'highpass'; crack.frequency.value = 5000;
-  for (const f of [kick, body, crack]) { bass.connect(f); f.connect(drumIn); }
+  const drumBands = [kick, body, crack];
+  for (const f of drumBands) f.connect(drumIn); // fed from bass only while drum tail is up
   const tailVerb = ctx.createConvolver();
   tailVerb.normalize = false;
   tailVerb.buffer = makeTailImpulse(ctx);
@@ -93,16 +95,32 @@ export async function buildChain(ctx, input, settings) {
 
   stretch.start();
 
+  // Effects at 0 are taken out of the sound path, so they cost nothing (less work for the
+  // audio thread = fewer dropouts on a busy computer). Taken out only after they faded.
+  const linked = {}, unlinkTimers = {};
+  const link = (name, on, connect, disconnect) => {
+    clearTimeout(unlinkTimers[name]);
+    if (on && !linked[name]) { connect(); linked[name] = true; }
+    else if (!on && linked[name]) unlinkTimers[name] = setTimeout(() => { try { disconnect(); } catch {} linked[name] = false; }, 400);
+  };
+
   const apply = (s, smooth = true) => {
     const t = ctx.currentTime;
     const set = (p, v) => (smooth ? p.setTargetAtTime(v, t, 0.05) : (p.value = v));
-    applied = { semitones: Math.round(shiftFor(s) * 100) / 100, speed: s.speed, pitch: s.pitch, tape: !!s.tape };
-    stretch.schedule({ semitones: shiftFor(s) });
+    const semitones = shiftFor(s);
+    applied = { semitones: Math.round(semitones * 100) / 100, speed: s.speed, pitch: s.pitch, tape: !!s.tape };
+    // Only re-program the shifter when the shift really changes: doing it on every bass /
+    // reverb slider tick made the sound stutter while dragging.
+    if (semitones !== scheduled) { stretch.schedule({ semitones }); scheduled = semitones; }
     set(bass.gain, s.bass);
     const r = Math.max(0, Math.min(1, s.reverb));
-    set(wet.gain, r * 0.5);
-    set(dry.gain, 1 - r * 0.25);
-    set(tail.parameters.get('amount'), Math.max(0, Math.min(1, Number(s.tail) || 0)));
+    // Wet rises clearly, dry dips a little so the reverb is audible on dense songs too.
+    set(wet.gain, r * 1.4);
+    set(dry.gain, 1 - r * 0.35);
+    const tailAmt = Math.max(0, Math.min(1, Number(s.tail) || 0));
+    set(tail.parameters.get('amount'), tailAmt);
+    link('verb', r > 0, () => bass.connect(verb), () => bass.disconnect(verb));
+    link('drum', tailAmt > 0, () => drumBands.forEach((f) => bass.connect(f)), () => drumBands.forEach((f) => bass.disconnect(f)));
   };
   apply(settings, false);
 

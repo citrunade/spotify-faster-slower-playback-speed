@@ -12,6 +12,8 @@
   const els = new Set();
   const pageRate = new WeakMap();
   let forced = 1; // 1 = not forcing
+  // Light mode (sound not captured): keep Chrome's own pitch keeping on while forcing the rate.
+  let keepPitch = false;
 
   const nativeRate = (el) => rateDesc.get.call(el);
 
@@ -19,7 +21,7 @@
     const on = forced !== 1;
     const target = on ? forced : (pageRate.get(el) ?? 1);
     try {
-      if (pitchDesc) pitchDesc.set.call(el, !on);
+      if (pitchDesc) pitchDesc.set.call(el, !on || keepPitch);
       if (nativeRate(el) !== target) rateDesc.set.call(el, target);
     } catch {}
   }
@@ -50,7 +52,10 @@
   };
 
   document.addEventListener('spotifystretch:rate', (e) => {
-    const r = Number(e.detail);
+    // detail: "<rate>" (full engine corrects the pitch) or "<rate>|light" (Chrome keeps it).
+    const [rs, mode] = String(e.detail).split('|');
+    keepPitch = mode === 'light';
+    const r = Number(rs);
     forced = r > 0 ? r : 1;
     document.querySelectorAll('audio, video').forEach(track);
     els.forEach(applyTo);

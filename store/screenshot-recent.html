@@ -1,0 +1,103 @@
+<!doctype html>
+<!-- Source for store/screenshot-2.png (1280x800): the Recently played list. make-promo.ps1 renders it.
+     Song names and covers are made up. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1280px; height: 800px; overflow: hidden; background: #0d0d0f; }
+  body { position: relative; font-family: "Segoe UI Variable Display", "Segoe UI", Roboto, Arial, sans-serif; color: #f4f4f5;
+    background: radial-gradient(90% 110% at 0% 0%, rgba(30,215,96,.2), transparent 55%), #0d0d0f; }
+  .left { position: absolute; left: 82px; top: 50%; transform: translateY(-50%); width: 640px; }
+  .eyebrow { color: #1ed760; font-size: 22px; font-weight: 600; margin-bottom: 22px; }
+  h1 { font-size: 54px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.08; }
+  h1 em { font-style: normal; color: #1ed760; }
+  ul { list-style: none; margin-top: 38px; display: grid; gap: 18px; }
+  li { position: relative; padding-left: 28px; font-size: 22px; color: #d4d4d8; }
+  li::before { content: ""; position: absolute; left: 4px; top: 11px; width: 9px; height: 9px; border-radius: 50%; background: #1ed760; }
+  .foot { position: absolute; left: 82px; bottom: 44px; font-size: 14px; color: #6b6b70; }
+
+  .panel { position: absolute; right: 90px; top: 50px; width: 418px; height: 700px; padding: 18px 12px; border-radius: 14px;
+    background: #121212; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; }
+  .tabs { display: flex; gap: 22px; padding: 0 8px 16px; font-size: 18px; font-weight: 700; }
+  .tabs span { color: #8a8a8f; }
+  .tabs span.on { color: #fff; }
+  .sub { padding: 0 8px 8px; font-size: 15px; font-weight: 700; color: #fff; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: 6px; }
+  .row.hover { background: rgba(255,255,255,.1); }
+  .cover { position: relative; flex: none; width: 48px; height: 48px; border-radius: 4px; }
+  .cover svg { position: absolute; inset: 0; margin: auto; width: 16px; height: 16px; fill: #fff; }
+  .row.hover .cover::after { content: ""; position: absolute; inset: 0; border-radius: 4px; background: rgba(0,0,0,.45); }
+  .row.hover .cover svg { z-index: 1; }
+  .text { flex: 1; min-width: 0; }
+  .t { font-size: 16px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t.playing { color: #1ed760; }
+  .a { font-size: 14px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .when { flex: none; font-size: 13px; color: #8a8a8f; }
+  .more { flex: none; width: 32px; text-align: center; color: #fff; font-size: 18px; letter-spacing: 1px; }
+
+  .menu { position: absolute; right: 30px; top: 252px; width: 232px; padding: 4px; border-radius: 6px; background: #282828;
+    box-shadow: 0 16px 24px rgba(0,0,0,.4), 0 6px 8px rgba(0,0,0,.3); font-size: 15px; }
+  .menu div { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 3px; color: rgba(255,255,255,.9); }
+  .menu div.hi { background: rgba(255,255,255,.1); color: #fff; }
+  .menu hr { height: 1px; border: 0; margin: 4px 0; background: rgba(255,255,255,.1); }
+  .menu svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="eyebrow">for the Spotify web player</div>
+    <h1>Recently played.<br><em>Like the desktop app.</em></h1>
+    <ul>
+      <li>A Recently played list the web player doesn't have</li>
+      <li>Play any song again with one click</li>
+      <li>Add to queue, like, or go to album, artist or song radio</li>
+      <li>Stays on your computer, never sent anywhere</li>
+    </ul>
+  </div>
+  <div class="foot">Not affiliated with Spotify. Song names and covers are examples.</div>
+
+  <div class="panel">
+    <div class="tabs"><span>Queue</span><span class="on">Recently played</span></div>
+    <div class="sub">Today</div>
+    <div id="rows"></div>
+  </div>
+
+  <div class="menu" id="menu"></div>
+
+<script>
+  const P = {
+    play: 'M4 2.5v11l9-5.5z',
+    queue: 'M1 3h10v1.5H1zM1 7.25h10v1.5H1zM1 11.5h6V13H1zM12.25 9.5h1.5v2h2V13h-2v2h-1.5v-2h-2v-1.5h2z',
+    like: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.25-3.5h1.5v2.75h2.75v1.5H8.75v2.75h-1.5V8.75H4.5v-1.5h2.75z',
+    radio: 'M8 6.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5zM4.11 3.05l1.06 1.06a5 5 0 0 0 0 7.78l-1.06 1.06a6.5 6.5 0 0 1 0-9.9zm7.78 0a6.5 6.5 0 0 1 0 9.9l-1.06-1.06a5 5 0 0 0 0-7.78z',
+    artist: 'M8 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3.5 4.5a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0zM1.5 15.5c0-3 2.9-5 6.5-5s6.5 2 6.5 5H13c0-2-2.1-3.5-5-3.5S3 13.5 3 15.5z',
+    album: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-1.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5zM5.25 8a2.75 2.75 0 1 1 5.5 0 2.75 2.75 0 0 1-5.5 0z',
+    remove: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm4.5-.75h7v1.5h-7z',
+  };
+  const icon = (k) => `<svg viewBox="0 0 16 16"><path d="${P[k]}"/></svg>`;
+  // Made-up songs; covers are plain colour gradients.
+  const songs = [
+    ['Late Night Static', 'The Low Lights', 'now', ['#1ed760', '#0b3d1f'], 'playing'],
+    ['Paper Satellites', 'Mira Vale', '4 min ago', ['#ff8a3d', '#5a1a3a'], 'hover'],
+    ['Slow Motion Summer', 'Coastline Kids', '8 min ago', ['#38bdf8', '#1e3a8a']],
+    ['Neon Rain', 'Hollow Avenue', '12 min ago', ['#c084fc', '#3b0764']],
+    ['Gold Dust', 'June & the Echo', '15 min ago', ['#facc15', '#713f12']],
+    ['Undertow', 'Saltwater Choir', '19 min ago', ['#2dd4bf', '#134e4a']],
+    ['Static Hearts', 'Velvet Arcade', '23 min ago', ['#fb7185', '#4c0519']],
+    ['Midnight Drive', 'The Low Lights', '27 min ago', ['#a3e635', '#1a2e05']],
+    ['Glass Houses', 'Northbound', '31 min ago', ['#f472b6', '#1e1b4b']],
+  ];
+  document.getElementById('rows').innerHTML = songs.map(([t, a, w, [c1, c2], s]) => `
+    <div class="row ${s === 'hover' ? 'hover' : ''}">
+      <div class="cover" style="background:linear-gradient(135deg,${c1},${c2})">${s === 'hover' ? icon('play') : ''}</div>
+      <div class="text"><div class="t ${s === 'playing' ? 'playing' : ''}">${t}</div><div class="a">${a}</div></div>
+      ${s === 'hover' ? '<div class="more">•••</div>' : `<div class="when">${w}</div>`}
+    </div>`).join('');
+  const items = [['play', 'Play'], ['queue', 'Add to queue', 'hi'], ['like', 'Add to Liked Songs'], null,
+    ['radio', 'Go to song radio'], ['artist', 'Go to artist'], ['album', 'Go to album'], null, ['remove', 'Remove from history']];
+  document.getElementById('menu').innerHTML = items.map((it) => it ? `<div class="${it[2] || ''}">${icon(it[0])}${it[1]}</div>` : '<hr>').join('');
+</script>
+</body>
+</html>
