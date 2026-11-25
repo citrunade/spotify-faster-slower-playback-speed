@@ -104,18 +104,18 @@ async function ssOpenPlaylistPicker(menu, anchor, entry, onAction) {
   if (menu.querySelector('#ss-playlist-picker')) return;
   const W = 260;
   const picker = ssEl('div', `position:fixed;width:${W}px;max-height:360px;display:flex;flex-direction:column;padding:4px;`
-    + 'background:#282828;border-radius:4px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);');
+    + 'background:#1f1f1f;border-radius:6px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);');
   picker.id = 'ss-playlist-picker';
   picker.setAttribute('role', 'menu');
   const search = ssEl('input', 'flex:none;margin:4px 4px 6px;padding:8px 10px;border:0;border-radius:4px;outline:none;'
-    + 'background:rgba(255,255,255,.1);color:#fff;font:inherit;');
+    + 'background:#2a2a2a;color:#fff;font:inherit;');
   search.type = 'text';
   search.placeholder = 'Find a playlist';
   search.setAttribute('aria-label', 'Find a playlist');
   // Typing here must not reach Spotify's keyboard shortcuts (space = play/pause).
   search.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); });
   const list = ssEl('div', 'overflow-y:auto;min-height:0;');
-  const status = (text) => list.replaceChildren(ssEl('div', 'padding:10px 12px;color:rgba(255,255,255,.6);white-space:normal;', text));
+  const status = (text) => list.replaceChildren(ssEl('div', 'padding:10px 12px;color:#b3b3b3;white-space:normal;', text));
   picker.append(search, list);
   menu.appendChild(picker);
   const m = menu.getBoundingClientRect(), a = anchor.getBoundingClientRect();
@@ -128,12 +128,12 @@ async function ssOpenPlaylistPicker(menu, anchor, entry, onAction) {
     if (!shown.length) { status(q ? 'No playlist by that name' : 'No playlists found'); return; }
     list.replaceChildren(...shown.map((name) => {
       const b = ssEl('button', 'display:flex;align-items:center;width:100%;height:40px;padding:12px;border:0;border-radius:2px;'
-        + 'background:none;color:rgba(255,255,255,.9);font:inherit;text-align:left;cursor:default;white-space:nowrap;');
+        + 'background:none;color:#fff;font:inherit;text-align:left;cursor:default;white-space:nowrap;');
       b.type = 'button';
       b.setAttribute('role', 'menuitem');
       b.appendChild(ssEl('span', 'overflow:hidden;text-overflow:ellipsis;', name));
-      b.addEventListener('mouseenter', () => { b.style.background = 'rgba(255,255,255,.1)'; b.style.color = '#fff'; });
-      b.addEventListener('mouseleave', () => { b.style.background = 'none'; b.style.color = 'rgba(255,255,255,.9)'; });
+      b.addEventListener('mouseenter', () => { b.style.background = '#2a2a2a'; });
+      b.addEventListener('mouseleave', () => { b.style.background = 'none'; });
       b.addEventListener('click', (e) => { e.stopPropagation(); menu.remove(); onAction('playlist', entry, name); });
       return b;
     }));
@@ -156,7 +156,7 @@ async function ssOpenPlaylistPicker(menu, anchor, entry, onAction) {
 function ssOpenMenu(entry, x, y, onAction, items = SS_MENU) {
   document.getElementById('ss-history-menu')?.remove();
   const menu = ssEl('div', 'position:fixed;z-index:2147483647;min-width:220px;max-width:350px;padding:4px;'
-    + 'background:#282828;border-radius:6px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);'
+    + 'background:#1f1f1f;border-radius:6px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);'
     + `${SS_FONT}font-size:.875rem;font-weight:400;line-height:1.25;`);
   menu.id = 'ss-history-menu';
   menu.setAttribute('role', 'menu');
@@ -164,23 +164,23 @@ function ssOpenMenu(entry, x, y, onAction, items = SS_MENU) {
   let lastWasDivider = true;
   for (const it of items) {
     if (!it) {
-      if (!lastWasDivider) menu.appendChild(ssEl('div', 'height:1px;margin:4px 0;background:rgba(255,255,255,.1);'));
+      if (!lastWasDivider) menu.appendChild(ssEl('div', 'height:1px;margin:4px 0;background:#2a2a2a;'));
       lastWasDivider = true;
       continue;
     }
     const [action, label, opt = {}] = it;
     const item = ssEl('button', 'display:flex;align-items:center;gap:12px;width:100%;height:36px;padding:0 12px;'
-      + 'border:0;border-radius:2px;background:none;color:rgba(255,255,255,.9);font:inherit;text-align:left;cursor:default;white-space:nowrap;');
+      + 'border:0;border-radius:2px;background:none;color:#fff;font:inherit;text-align:left;cursor:default;white-space:nowrap;');
     item.type = 'button';
     item.setAttribute('role', 'menuitem');
     // Items without an icon keep an empty space for one, so all the words line up.
     const icon = action === 'like' ? ssLikedIcon() : opt.icon ? ssIcon(opt.icon) : ssEl('span', 'flex:none;width:16px;');
     item.append(icon, ssEl('span', 'overflow:hidden;text-overflow:ellipsis;', label));
-    const hint = opt.key && ssEl('span', 'flex:none;margin-left:auto;padding-left:24px;color:rgba(255,255,255,.6);font-size:.8125rem;',
+    const hint = opt.key && ssEl('span', 'flex:none;margin-left:auto;padding-left:24px;color:#b3b3b3;font-size:.8125rem;',
       opt.alt ? `Alt ${opt.key}` : opt.key);
     if (hint) { item.appendChild(hint); keyed.push({ key: opt.key.toLowerCase(), alt: !!opt.alt, item }); }
-    item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,.1)'; item.style.color = '#fff'; });
-    item.addEventListener('mouseleave', () => { item.style.background = 'none'; item.style.color = 'rgba(255,255,255,.9)'; });
+    item.addEventListener('mouseenter', () => { item.style.background = '#2a2a2a'; });
+    item.addEventListener('mouseleave', () => { item.style.background = 'none'; });
     if (action === 'playlist') {
       // Opens the playlist picker beside the menu (on hover, like the desktop app, or on click).
       const arrow = ssIcon('chevron');
