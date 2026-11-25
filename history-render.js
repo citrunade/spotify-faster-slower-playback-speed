@@ -61,27 +61,27 @@ function ssLikedIcon() {
   return tile;
 }
 
-// null = divider line.
+// Laid out like Spotify's own song menu: icons only on the top few items (the rest keep the
+// same indent), the keyboard key on the right. null = divider line.
+// [action, label, { icon, key, alt }] — key (with Alt if alt) picks the item while the menu is open.
 const SS_MENU = [
-  ['playlist', 'Add to playlist'],
+  ['playlist', 'Add to playlist', { icon: 'playlist', key: 'P' }],
+  ['like', 'Add to Liked Songs', { icon: 'like', key: 'L' }],
+  ['queue', 'Add to queue', { icon: 'queue', key: 'Q' }],
   ['play', 'Play'],
-  ['like', 'Add to Liked Songs'],
-  ['queue', 'Add to queue'],
-  ['exclude', 'Exclude from your taste profile'],
-  ['jam', 'Start a Jam'],
-  null,
-  ['radio', 'Go to song radio'],
-  ['artist', 'Go to artist'],
-  ['album', 'Go to album'],
-  ['credits', 'View credits'],
-  null,
   ['remove', 'Remove from history'],
+  ['exclude', 'Exclude from your taste profile'],
+  null,
+  ['radio', 'Go to song radio', { key: 'R' }],
+  ['artist', 'Go to artist', { key: 'A', alt: true }],
+  ['album', 'Go to album', { key: 'A' }],
+  ['credits', 'View credits'],
 ];
 
 const SS_ARTIST_MENU = [
   ['follow', 'Follow'],
   ['block', 'Don’t play this artist'],
-  ['artistRadio', 'Go to artist radio', 'radio'],
+  ['artistRadio', 'Go to artist radio', { key: 'R' }],
   ['report', 'Report'],
 ];
 
@@ -155,11 +155,12 @@ async function ssOpenPlaylistPicker(menu, anchor, entry, onAction) {
 // Desktop-style menu for one song (or its artist: items = SS_ARTIST_MENU), at (x, y) in the viewport.
 function ssOpenMenu(entry, x, y, onAction, items = SS_MENU) {
   document.getElementById('ss-history-menu')?.remove();
-  const menu = ssEl('div', 'position:fixed;z-index:2147483647;min-width:196px;max-width:350px;padding:4px;'
-    + 'background:#282828;border-radius:4px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);'
+  const menu = ssEl('div', 'position:fixed;z-index:2147483647;min-width:220px;max-width:350px;padding:4px;'
+    + 'background:#282828;border-radius:6px;box-shadow:0 16px 24px rgba(0,0,0,.3),0 6px 8px rgba(0,0,0,.2);'
     + `${SS_FONT}font-size:.875rem;font-weight:400;line-height:1.25;`);
   menu.id = 'ss-history-menu';
   menu.setAttribute('role', 'menu');
+  const keyed = []; // [{ key, alt, item }] for the keyboard keys
   let lastWasDivider = true;
   for (const it of items) {
     if (!it) {
@@ -167,18 +168,23 @@ function ssOpenMenu(entry, x, y, onAction, items = SS_MENU) {
       lastWasDivider = true;
       continue;
     }
-    const [action, label, icon = action] = it;
-    const item = ssEl('button', 'display:flex;align-items:center;gap:12px;width:100%;height:40px;padding:12px 8px 12px 12px;'
+    const [action, label, opt = {}] = it;
+    const item = ssEl('button', 'display:flex;align-items:center;gap:12px;width:100%;height:36px;padding:0 12px;'
       + 'border:0;border-radius:2px;background:none;color:rgba(255,255,255,.9);font:inherit;text-align:left;cursor:default;white-space:nowrap;');
     item.type = 'button';
     item.setAttribute('role', 'menuitem');
-    item.append(action === 'like' ? ssLikedIcon() : ssIcon(icon), ssEl('span', 'overflow:hidden;text-overflow:ellipsis;', label));
+    // Items without an icon keep an empty space for one, so all the words line up.
+    const icon = action === 'like' ? ssLikedIcon() : opt.icon ? ssIcon(opt.icon) : ssEl('span', 'flex:none;width:16px;');
+    item.append(icon, ssEl('span', 'overflow:hidden;text-overflow:ellipsis;', label));
+    const hint = opt.key && ssEl('span', 'flex:none;margin-left:auto;padding-left:24px;color:rgba(255,255,255,.6);font-size:.8125rem;',
+      opt.alt ? `Alt ${opt.key}` : opt.key);
+    if (hint) { item.appendChild(hint); keyed.push({ key: opt.key.toLowerCase(), alt: !!opt.alt, item }); }
     item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,.1)'; item.style.color = '#fff'; });
     item.addEventListener('mouseleave', () => { item.style.background = 'none'; item.style.color = 'rgba(255,255,255,.9)'; });
     if (action === 'playlist') {
       // Opens the playlist picker beside the menu (on hover, like the desktop app, or on click).
       const arrow = ssIcon('chevron');
-      arrow.style.marginLeft = 'auto';
+      if (hint) { arrow.style.marginLeft = '12px'; } else arrow.style.marginLeft = 'auto';
       item.appendChild(arrow);
       let hoverTimer = 0;
       item.addEventListener('mouseenter', () => { hoverTimer = setTimeout(() => ssOpenPlaylistPicker(menu, item, entry, onAction), 250); });
@@ -206,15 +212,28 @@ function ssOpenMenu(entry, x, y, onAction, items = SS_MENU) {
   menu.style.left = `${Math.max(4, Math.min(x, innerWidth - r.width - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(y, innerHeight - r.height - 4))}px`;
   const close = (e) => {
-    if (e.type === 'keydown' && e.key !== 'Escape') return;
+    if (!menu.isConnected) { stop(); return; }
+    if (e.type === 'keydown' && e.key !== 'Escape') {
+      if (menu.querySelector('#ss-playlist-picker input') === document.activeElement) return; // typing a playlist name
+      // A key shown in the menu picks that item, and doesn't reach Spotify's own shortcuts.
+      const hit = !e.ctrlKey && !e.metaKey && keyed.find((k) => k.key === e.key.toLowerCase() && k.alt === e.altKey);
+      if (!hit) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      hit.item.click();
+      return;
+    }
     if (e.type === 'mousedown' && menu.contains(e.target)) return;
     menu.remove();
-    document.removeEventListener('mousedown', close, true);
-    document.removeEventListener('keydown', close, true);
+    stop();
+  };
+  const stop = () => {
+    window.removeEventListener('mousedown', close, true);
+    window.removeEventListener('keydown', close, true);
   };
   setTimeout(() => {
-    document.addEventListener('mousedown', close, true);
-    document.addEventListener('keydown', close, true);
+    window.addEventListener('mousedown', close, true);
+    window.addEventListener('keydown', close, true);
   });
 }
 

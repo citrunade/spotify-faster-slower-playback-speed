@@ -37,9 +37,15 @@
   .when { flex: none; font-size: 13px; color: #8a8a8f; }
   .more { flex: none; width: 32px; text-align: center; color: #fff; font-size: 18px; letter-spacing: 1px; }
 
-  .menu { position: absolute; right: 30px; top: 252px; width: 232px; padding: 4px; border-radius: 6px; background: #282828;
+  .menu { position: absolute; right: 30px; top: 252px; width: 262px; padding: 4px; border-radius: 6px; background: #282828;
     box-shadow: 0 16px 24px rgba(0,0,0,.4), 0 6px 8px rgba(0,0,0,.3); font-size: 15px; }
-  .menu div { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 3px; color: rgba(255,255,255,.9); }
+  .menu div { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; border-radius: 3px; color: rgba(255,255,255,.9); }
+  .menu .k { margin-left: auto; padding-left: 24px; font-size: 13px; color: rgba(255,255,255,.6); }
+  .menu .k + svg { margin-left: 12px; }
+  .menu .gap { width: 16px; flex: none; }
+  .menu .liked { width: 16px; height: 16px; flex: none; border-radius: 2px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg,#450af5,#8e8ee5 60%,#c4efd9); }
+  .menu .liked svg { width: 10px; height: 10px; fill: #fff; }
   .menu div.hi { background: rgba(255,255,255,.1); color: #fff; }
   .menu hr { height: 1px; border: 0; margin: 4px 0; background: rgba(255,255,255,.1); }
   .menu svg { width: 16px; height: 16px; fill: currentColor; flex: none; }
@@ -70,7 +76,9 @@
   const P = {
     play: 'M4 2.5v11l9-5.5z',
     queue: 'M1 3h10v1.5H1zM1 7.25h10v1.5H1zM1 11.5h6V13H1zM12.25 9.5h1.5v2h2V13h-2v2h-1.5v-2h-2v-1.5h2z',
-    like: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.25-3.5h1.5v2.75h2.75v1.5H8.75v2.75h-1.5V8.75H4.5v-1.5h2.75z',
+    like: 'M8 14 2.2 8.2a3.4 3.4 0 0 1 4.8-4.8l1 1 1-1a3.4 3.4 0 0 1 4.8 4.8z',
+    playlist: 'M7.25 1.5h1.5v5.75h5.75v1.5H8.75v5.75h-1.5V8.75H1.5v-1.5h5.75z',
+    chevron: 'M5.5 2.5 11 8l-5.5 5.5-1.06-1.06L8.88 8 4.44 3.56z',
     radio: 'M8 6.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5zM4.11 3.05l1.06 1.06a5 5 0 0 0 0 7.78l-1.06 1.06a6.5 6.5 0 0 1 0-9.9zm7.78 0a6.5 6.5 0 0 1 0 9.9l-1.06-1.06a5 5 0 0 0 0-7.78z',
     artist: 'M8 1.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3.5 4.5a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0zM1.5 15.5c0-3 2.9-5 6.5-5s6.5 2 6.5 5H13c0-2-2.1-3.5-5-3.5S3 13.5 3 15.5z',
     album: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-1.25a1.25 1.25 0 1 0 0 2.5 1.25 1.25 0 0 0 0-2.5zM5.25 8a2.75 2.75 0 1 1 5.5 0 2.75 2.75 0 0 1-5.5 0z',
@@ -95,9 +103,14 @@
       <div class="text"><div class="t ${s === 'playing' ? 'playing' : ''}">${t}</div><div class="a">${a}</div></div>
       ${s === 'hover' ? '<div class="more">•••</div>' : `<div class="when">${w}</div>`}
     </div>`).join('');
-  const items = [['play', 'Play'], ['queue', 'Add to queue', 'hi'], ['like', 'Add to Liked Songs'], null,
-    ['radio', 'Go to song radio'], ['artist', 'Go to artist'], ['album', 'Go to album'], null, ['remove', 'Remove from history']];
-  document.getElementById('menu').innerHTML = items.map((it) => it ? `<div class="${it[2] || ''}">${icon(it[0])}${it[1]}</div>` : '<hr>').join('');
+  // Same layout as the extension's menu (and Spotify's): icons on the top three, keys on the right.
+  const items = [['playlist', 'Add to playlist', '', 'P', true], ['like', 'Add to Liked Songs', '', 'L'], ['queue', 'Add to queue', 'hi', 'Q'],
+    [null, 'Play'], [null, 'Remove from history'], null,
+    [null, 'Go to song radio', '', 'R'], [null, 'Go to artist', '', 'Alt A'], [null, 'Go to album', '', 'A']];
+  const lead = (k) => !k ? '<span class="gap"></span>' : k === 'like' ? `<span class="liked">${icon('like')}</span>` : icon(k);
+  document.getElementById('menu').innerHTML = items.map((it) => it
+    ? `<div class="${it[2] || ''}">${lead(it[0])}${it[1]}${it[3] ? `<span class="k">${it[3]}</span>` : ''}${it[4] ? icon('chevron') : ''}</div>`
+    : '<hr>').join('');
 </script>
 </body>
 </html>

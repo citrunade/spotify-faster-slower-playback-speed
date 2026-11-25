@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Spotify Faster / Slower Control + Recently Played",
   "short_name": "Faster / Slower",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Speed up or slow down the Spotify web player at the original pitch, plus a Recently played list. Not affiliated with Spotify.",
   "minimum_chrome_version": "116",
   "icons": {

@@ -9,19 +9,40 @@
   const LINK_WAIT_POLLS = 8; // after a reload the player bar's links can take a while: wait ~16 s
 
   // ---- Recording -------------------------------------------------------------------
+  // Any form of a Spotify link ("/album/ID", "/intl-de/album/ID", "https://open.spotify.com/album/ID?si=…",
+  // "spotify:album:ID") as one plain path ("/album/ID"), so saved and live links compare equal.
+  const canon = (u, kind) => {
+    if (!u) return null;
+    const m = String(u).match(new RegExp(`(?:^|[/:])${kind || '(album|artist|track)'}[/:]([A-Za-z0-9]+)`));
+    if (!m) return null;
+    return kind ? `/${kind}/${m[1]}` : `/${m[1]}/${m[2]}`;
+  };
+  const here = () => canon(location.pathname) || location.pathname;
+
   function nowPlaying() {
     const m = navigator.mediaSession?.metadata;
     if (!m || !m.title) return null;
-    const w = document.querySelector('[data-testid="now-playing-widget-v2"], [data-testid="now-playing-widget"]');
-    const href = (sel) => w?.querySelector(sel)?.getAttribute('href')?.split('?')[0] || null;
+    const bars = [
+      document.querySelector('[data-testid="now-playing-widget-v2"], [data-testid="now-playing-widget"]'),
+      document.querySelector('[data-testid="now-playing-bar"], [data-testid="player-bar"]'),
+    ].filter(Boolean);
+    const link = (kind) => {
+      for (const bar of bars) {
+        for (const a of bar.querySelectorAll('a[href], [data-uri], [data-context-uri]')) {
+          const u = canon(a.getAttribute('href') || a.getAttribute('data-uri') || a.getAttribute('data-context-uri'), kind);
+          if (u) return u;
+        }
+      }
+      return null;
+    };
     const art = [...(m.artwork || [])];
     const bySize = (size) => art.find((a) => a.sizes === size)?.src;
     return {
       title: m.title,
       artist: m.artist || '',
       album: m.album || '',
-      albumUrl: href('a[href^="/album/"]'),
-      artistUrl: href('a[href^="/artist/"]'),
+      albumUrl: link('album'),
+      artistUrl: link('artist'),
       cover: bySize('64x64') || bySize('300x300') || art[0]?.src || null,
     };
   }
@@ -58,7 +79,8 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function navigate(path) {
-    if (location.pathname === path) return;
+    path = canon(path) || path; // old saved links in another shape still open the right page
+    if (here() === path) return;
     history.pushState({ key: Math.random().toString(36).slice(2, 8), state: {} }, '', path);
     dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
@@ -148,7 +170,7 @@
     const want = norm(entry.title);
     for (let i = 0; i < 60; i++) { // up to ~12 s
       await sleep(200);
-      if (location.pathname !== entry.albumUrl) continue;
+      if (here() !== canon(entry.albumUrl, 'album')) continue;
       const { rows, row } = findRow(want);
       if (row) return row;
       const pageTitle = document.querySelector('main [data-testid="entityTitle"]')?.textContent;
@@ -159,6 +181,7 @@
     return null;
   }
 
+  let menuSeen = null;
   const rowButton = (row, re) => [...row.querySelectorAll('button')].find((b) => re.test(b.getAttribute('aria-label') || ''));
 
   async function menuItem(row, re) {
@@ -167,10 +190,13 @@
     more.click();
     for (let i = 0; i < 15; i++) {
       await sleep(100);
-      const items = [...document.querySelectorAll('[role="menu"] li > button, [role="menu"] li > a')];
+      const items = [...new Set(document.querySelectorAll('[role="menu"] li > button, [role="menu"] li > a, [role="menu"] [role="menuitem"]'))];
       if (!items.length) continue;
-      const item = items.find((m) => re.test(m.textContent.trim()));
+      // The menu's wording, plus any keyboard hint Spotify adds after it, is not counted.
+      const label = (m) => (m.getAttribute('aria-label') || m.querySelector('span')?.textContent || m.textContent).trim();
+      const item = items.find((m) => re.test(label(m)) || re.test(m.textContent.trim()));
       if (item) { item.click(); return 'ok'; }
+      menuSeen = items.map((m) => m.textContent.trim()); // kept so a renamed item shows up in the notes
       more.click(); // close the menu again
       return 'no-item';
     }
@@ -244,12 +270,12 @@
       else row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }));
       return 'ok';
     },
-    queue: (row) => menuItem(row, /^Add to queue$/i),
+    queue: (row) => menuItem(row, /^Add to (the )?queue/i),
     like: async (row) => {
       if (rowButton(row, /^Remove from (your )?Liked Songs/i)) return 'already';
       return menuItem(row, /^(Add|Save) to (your )?Liked Songs$/i);
     },
-    radio: (row) => menuItem(row, /^Go to song radio$/i),
+    radio: (row) => menuItem(row, /^(Go to |Start |Open )?(song |track )?radio/i),
     exclude: (row) => menuItem(row, /^Exclude from your taste profile$/i),
     jam: (row) => menuItem(row, /^Start a Jam$/i),
     credits: async (row) => {
@@ -280,7 +306,7 @@
   async function openArtistBar(entry) {
     for (let i = 0; i < 60; i++) { // up to ~12 s
       await sleep(200);
-      if (location.pathname !== entry.artistUrl) continue;
+      if (here() !== canon(entry.artistUrl, 'artist')) continue;
       const bar = document.querySelector('main [data-testid="artist-page"] [data-testid="action-bar-row"]');
       if (!bar?.querySelector('[data-testid="more-button"]')) continue;
       const name = document.querySelector('main [data-testid="entityTitle"]')?.textContent;
@@ -302,6 +328,19 @@
   // Last attempt's details, kept so a failure can be diagnosed.
   const note = (d) => chrome.storage.local.set({ lastPlayAttempt: { at: Date.now(), ...d } }).catch(() => {});
 
+  // Spotify's own song and artist menus are opened and clicked behind the scenes: keep them
+  // invisible meanwhile (still clickable, so only how they look changes). Pop-up windows such as
+  // credits or "already in this playlist" are not menus and still show.
+  function hideMenus(on) {
+    let s = document.getElementById('ss-hide-menus');
+    if (!on) { s?.remove(); return; }
+    if (s) return;
+    s = document.createElement('style');
+    s.id = 'ss-hide-menus';
+    s.textContent = '[data-tippy-root], #context-menu, [role="menu"]:not(#ss-history-menu):not(#ss-playlist-picker) { opacity: 0 !important; transition: none !important; }';
+    document.documentElement.appendChild(s);
+  }
+
   let busy = false;
   // Returns the playlist names for 'playlists' (null if they couldn't be read).
   async function act(action, entry, arg) {
@@ -317,11 +356,13 @@
     if (busy) return null;
     busy = true;
     playlistNames = null;
-    const from = location.pathname;
-    const page = artistAction ? entry.artistUrl : entry.albumUrl;
+    menuSeen = null;
+    const from = here();
+    const page = artistAction ? canon(entry.artistUrl, 'artist') : canon(entry.albumUrl, 'album');
     const onAlbum = from === page;
     const frozen = onAlbum ? null : freezeMain();
     let result = 'not-found';
+    hideMenus(true);
     try {
       navigate(page);
       if (artistAction) {
@@ -333,7 +374,8 @@
         if (row) result = await ACTIONS[action](row, arg);
       }
     } catch (e) { result = `error: ${e.message}`; }
-    note({ action, want: entry.title, from, album: page, result, titles: findRow('').rows.map(titleOf).slice(0, 30) });
+    setTimeout(() => hideMenus(false), 400); // let the menu finish closing out of sight first
+    note({ action, want: entry.title, from, album: page, result, menu: menuSeen, titles: findRow('').rows.map(titleOf).slice(0, 30) });
     if (STAYS[action] && result === 'ok') { await sleep(400); frozen?.cover.remove(); busy = false; return; }
     if (result === 'not-found') {
       frozen?.cover.remove(); // leave them on the album so they can pick the song themselves
