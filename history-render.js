@@ -250,7 +250,7 @@ function ssBuildHistoryList(entries, onAction, currentKey) {
   }
   const ellipsis = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
   for (const e of entries) {
-    const row = ssEl('div', 'display:flex;gap:12px;align-items:center;padding:8px;border-radius:4px;cursor:default;');
+    const row = ssEl('div', 'display:flex;gap:12px;align-items:center;padding:8px;border-radius:6px;cursor:default;');
     row.className = 'ss-history-row';
     row.setAttribute('role', 'listitem');
     row.title = `${e.title} · played ${ssTimeAgo(e.playedAt)}`;
@@ -304,13 +304,17 @@ function ssBuildHistoryList(entries, onAction, currentKey) {
       ssOpenMenu(e, r.right - 196, r.bottom + 4, onAction);
     });
     row.appendChild(more);
+    // Same as Spotify's queue rows: solid highlight on hover (no fade), black while pressed.
+    const HOVER_BG = 'var(--background-highlight, #1f1f1f)', PRESS_BG = 'var(--background-press, #000)';
     const hover = (on) => {
-      row.style.background = on ? 'rgba(255,255,255,.1)' : '';
+      row.style.background = on ? HOVER_BG : '';
       more.style.visibility = on ? 'visible' : 'hidden';
       play.style.display = on ? 'flex' : 'none';
     };
     row.addEventListener('mouseenter', () => hover(true));
     row.addEventListener('mouseleave', () => hover(false));
+    row.addEventListener('mousedown', (ev) => { if (ev.button === 0) row.style.background = PRESS_BG; });
+    row.addEventListener('mouseup', () => { if (row.matches(':hover')) row.style.background = HOVER_BG; });
     list.appendChild(row);
   }
   return list;
